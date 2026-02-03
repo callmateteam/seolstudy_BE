@@ -126,6 +126,22 @@ async def onboard_mentor(db: Prisma, user, data: MentorOnboardingRequest):
             }
         )
 
+    if data.menteeInviteCode:
+        mentee = await db.menteeprofile.find_unique(
+            where={"inviteCode": data.menteeInviteCode}
+        )
+        if mentee:
+            existing_link = await db.mentormentee.find_first(
+                where={"mentorId": profile.id, "menteeId": mentee.id}
+            )
+            if not existing_link:
+                await db.mentormentee.create(
+                    data={
+                        "mentor": {"connect": {"id": profile.id}},
+                        "mentee": {"connect": {"id": mentee.id}},
+                    }
+                )
+
     return profile
 
 

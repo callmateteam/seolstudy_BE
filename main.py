@@ -3,9 +3,23 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
+from app.core.config import settings as app_settings
 from app.core.deps import db
-from app.routers import auth, mentor, onboarding, parent, planner, submissions, tasks
+from app.routers import (
+    analysis,
+    auth,
+    coaching,
+    feedback,
+    materials,
+    mentor,
+    onboarding,
+    parent,
+    planner,
+    settings,
+    submissions,
+    tasks,
+    uploads,
+)
 
 
 @asynccontextmanager
@@ -24,7 +38,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=app_settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,6 +52,12 @@ app.include_router(submissions.router)
 app.include_router(planner.router)
 app.include_router(mentor.router)
 app.include_router(parent.router)
+app.include_router(uploads.router)
+app.include_router(analysis.router)
+app.include_router(materials.router)
+app.include_router(coaching.router)
+app.include_router(feedback.router)
+app.include_router(settings.router)
 
 
 @app.get("/health")

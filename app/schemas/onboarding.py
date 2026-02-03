@@ -39,6 +39,10 @@ class MentorOnboardingRequest(BaseModel):
         examples=[True],
         description="코칭 경험 여부",
     )
+    menteeInviteCode: str | None = Field(
+        default=None,
+        description="멘티 초대 코드 (입력 시 멘토-멘티 연결)",
+    )
 
 
 class ParentOnboardingRequest(BaseModel):
