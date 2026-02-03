@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.deps import db
-from app.routers import auth, onboarding, planner, submissions, tasks
+from app.routers import auth, mentor, onboarding, parent, planner, submissions, tasks
 
 
 @asynccontextmanager
@@ -36,6 +36,8 @@ app.include_router(onboarding.router)
 app.include_router(tasks.router)
 app.include_router(submissions.router)
 app.include_router(planner.router)
+app.include_router(mentor.router)
+app.include_router(parent.router)
 
 
 @app.get("/health")
