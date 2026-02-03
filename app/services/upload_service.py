@@ -1,19 +1,42 @@
-import os
 import uuid
 
+import boto3
 from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import settings
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+_s3_client = None
 
 
-def _ensure_upload_dir():
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+def _get_s3():
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client(
+            "s3",
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION,
+        )
+    return _s3_client
 
 
 def _get_extension(filename: str) -> str:
     return filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+
+def _s3_url(key: str) -> str:
+    return f"https://{settings.S3_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
+
+
+async def _upload_to_s3(content: bytes, key: str, content_type: str) -> str:
+    s3 = _get_s3()
+    s3.put_object(
+        Bucket=settings.S3_BUCKET_NAME,
+        Key=key,
+        Body=content,
+        ContentType=content_type,
+    )
+    return _s3_url(key)
 
 
 async def upload_image(file: UploadFile) -> dict:
@@ -32,14 +55,12 @@ async def upload_image(file: UploadFile) -> dict:
             detail={"code": "SUBMIT_003", "message": f"파일 크기가 {settings.MAX_IMAGE_SIZE_MB}MB를 초과합니다"},
         )
 
-    _ensure_upload_dir()
-    saved_name = f"{uuid.uuid4()}.{ext}"
-    path = os.path.join(UPLOAD_DIR, saved_name)
-    with open(path, "wb") as f:
-        f.write(content)
+    key = f"images/{uuid.uuid4()}.{ext}"
+    content_type = file.content_type or f"image/{ext}"
+    url = await _upload_to_s3(content, key, content_type)
 
     return {
-        "url": f"/uploads/{saved_name}",
+        "url": url,
         "originalName": file.filename or "",
         "size": len(content),
     }
@@ -61,14 +82,11 @@ async def upload_pdf(file: UploadFile) -> dict:
             detail={"code": "SUBMIT_003", "message": f"파일 크기가 {settings.MAX_PDF_SIZE_MB}MB를 초과합니다"},
         )
 
-    _ensure_upload_dir()
-    saved_name = f"{uuid.uuid4()}.{ext}"
-    path = os.path.join(UPLOAD_DIR, saved_name)
-    with open(path, "wb") as f:
-        f.write(content)
+    key = f"pdfs/{uuid.uuid4()}.{ext}"
+    url = await _upload_to_s3(content, key, "application/pdf")
 
     return {
-        "url": f"/uploads/{saved_name}",
+        "url": url,
         "originalName": file.filename or "",
         "size": len(content),
     }
