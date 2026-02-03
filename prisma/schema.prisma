@@ -1,0 +1,261 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider             = "prisma-client-py"
+  recursive_type_depth = 5
+}
+
+// ========== Enums ==========
+
+enum Role {
+  MENTEE
+  MENTOR
+  PARENT
+}
+
+enum Subject {
+  KOREAN
+  ENGLISH
+  MATH
+}
+
+enum Grade {
+  HIGH1
+  HIGH2
+  HIGH3
+  N_REPEAT
+}
+
+enum TaskStatus {
+  PENDING
+  SUBMITTED
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum SignalLight {
+  GREEN
+  YELLOW
+  RED
+}
+
+enum MaterialType {
+  COLUMN
+  PDF
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum CreatedBy {
+  MENTOR
+  MENTEE
+}
+
+enum SubmissionType {
+  TEXT
+  DRAWING
+}
+
+// ========== Models ==========
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  name         String
+  phone        String?
+  profileImage String?
+  nickname     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  menteeProfile MenteeProfile?
+  mentorProfile MentorProfile?
+  parentProfile ParentProfile?
+}
+
+model MenteeProfile {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id])
+  grade          Grade
+  subjects       Subject[]
+  currentGrades  Json      // { "KOREAN": 3, "ENGLISH": 2, "MATH": 4 }
+  targetGrades   Json      // { "KOREAN": 1, "ENGLISH": 1, "MATH": 2 }
+  onboardingDone Boolean   @default(false)
+  inviteCode     String    @unique @default(uuid())
+  createdAt      DateTime  @default(now())
+
+  mentors     MentorMentee[]
+  tasks       Task[]
+  submissions TaskSubmission[]
+  feedbacks   Feedback[]
+  comments    DailyComment[]
+  parentLinks ParentProfile[]
+}
+
+model MentorProfile {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  user               User      @relation(fields: [userId], references: [id])
+  university         String
+  department         String
+  subjects           Subject[]
+  coachingExperience Boolean   @default(false)
+  onboardingDone     Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+
+  mentees   MentorMentee[]
+  judgments MentorJudgment[]
+  feedbacks Feedback[]
+}
+
+model ParentProfile {
+  id        String        @id @default(uuid())
+  userId    String        @unique
+  user      User          @relation(fields: [userId], references: [id])
+  menteeId  String
+  mentee    MenteeProfile @relation(fields: [menteeId], references: [id])
+  createdAt DateTime      @default(now())
+}
+
+model MentorMentee {
+  id        String        @id @default(uuid())
+  mentorId  String
+  mentor    MentorProfile @relation(fields: [mentorId], references: [id])
+  menteeId  String
+  mentee    MenteeProfile @relation(fields: [menteeId], references: [id])
+  createdAt DateTime      @default(now())
+
+  @@unique([mentorId, menteeId])
+}
+
+model Task {
+  id                String        @id @default(uuid())
+  menteeId          String
+  mentee            MenteeProfile @relation(fields: [menteeId], references: [id])
+  createdByMentorId String?
+  date              DateTime      @db.Date
+  title             String
+  goal              String?
+  subject           Subject
+  abilityTag        String?
+  materialType      MaterialType?
+  materialId        String?
+  materialUrl       String?
+  isLocked          Boolean       @default(false)
+  status            TaskStatus    @default(PENDING)
+  studyTimeMinutes  Int?
+  createdBy         CreatedBy
+  displayOrder      Int           @default(0)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  submissions   TaskSubmission[]
+  feedbackItems FeedbackItem[]
+}
+
+model TaskSubmission {
+  id               String         @id @default(uuid())
+  taskId           String
+  task             Task           @relation(fields: [taskId], references: [id])
+  menteeId         String
+  mentee           MenteeProfile  @relation(fields: [menteeId], references: [id])
+  submissionType   SubmissionType
+  textContent      String?
+  images           String[]
+  selfScoreCorrect Int?
+  selfScoreTotal   Int?
+  wrongQuestions   Int[]
+  submittedAt      DateTime       @default(now())
+
+  analysis AiAnalysis?
+}
+
+model AiAnalysis {
+  id           String         @id @default(uuid())
+  submissionId String         @unique
+  submission   TaskSubmission @relation(fields: [submissionId], references: [id])
+  status       AnalysisStatus @default(PENDING)
+  signalLight  SignalLight?
+  densityScore Int?
+  writingRatio Float?
+  traceTypes   Json?
+  pageHeatmap  Json?
+  summary      String?
+  retryCount   Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  judgment MentorJudgment?
+}
+
+model MentorJudgment {
+  id                  String        @id @default(uuid())
+  analysisId          String        @unique
+  analysis            AiAnalysis    @relation(fields: [analysisId], references: [id])
+  mentorId            String
+  mentor              MentorProfile @relation(fields: [mentorId], references: [id])
+  originalSignalLight SignalLight
+  originalScore       Int
+  finalSignalLight    SignalLight
+  finalScore          Int
+  reason              String?
+  isModified          Boolean       @default(false)
+  confirmedAt         DateTime      @default(now())
+}
+
+model Feedback {
+  id             String        @id @default(uuid())
+  menteeId       String
+  mentee         MenteeProfile @relation(fields: [menteeId], references: [id])
+  mentorId       String
+  mentor         MentorProfile @relation(fields: [mentorId], references: [id])
+  date           DateTime      @db.Date
+  summary        String?
+  isHighlighted  Boolean       @default(false)
+  generalComment String?
+  sentAt         DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+
+  items FeedbackItem[]
+}
+
+model FeedbackItem {
+  id         String   @id @default(uuid())
+  feedbackId String
+  feedback   Feedback @relation(fields: [feedbackId], references: [id])
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id])
+  detail     String
+}
+
+model DailyComment {
+  id        String        @id @default(uuid())
+  menteeId  String
+  mentee    MenteeProfile @relation(fields: [menteeId], references: [id])
+  date      DateTime      @db.Date
+  content   String
+  createdAt DateTime      @default(now())
+}
+
+model Material {
+  id          String       @id @default(uuid())
+  title       String
+  type        MaterialType
+  subject     Subject
+  abilityTags String[]
+  difficulty  Int?
+  contentUrl  String
+  createdAt   DateTime     @default(now())
+}
