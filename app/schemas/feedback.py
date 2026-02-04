@@ -27,3 +27,25 @@ class FeedbackListItem(BaseModel):
     generalComment: str | None = None
     mentorName: str | None = None
     itemCount: int = 0
+
+
+class FeedbackItemWithAnalysis(BaseModel):
+    id: str
+    taskId: str
+    detail: str
+    taskTitle: str
+    taskDate: dt.date
+    aiSummary: str | None = None
+    signalLight: str | None = None
+    densityScore: int | None = None
+    submissionId: str | None = None
+
+
+class FeedbackBySubjectItem(BaseModel):
+    id: str
+    date: dt.date
+    summary: str | None = None
+    isHighlighted: bool
+    generalComment: str | None = None
+    mentorName: str | None = None
+    items: list[FeedbackItemWithAnalysis] = []

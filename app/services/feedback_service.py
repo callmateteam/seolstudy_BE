@@ -37,7 +37,17 @@ async def get_feedback_by_subject(db: Prisma, mentee_id: str, subject: str):
     feedbacks = await db.feedback.find_many(
         where={"menteeId": mentee_id},
         include={
-            "items": {"include": {"task": True}},
+            "items": {
+                "include": {
+                    "task": {
+                        "include": {
+                            "submissions": {
+                                "include": {"analysis": True}
+                            }
+                        }
+                    }
+                }
+            },
             "mentor": {"include": {"user": True}},
         },
         order={"sentAt": "desc"},
@@ -49,14 +59,51 @@ async def get_feedback_by_subject(db: Prisma, mentee_id: str, subject: str):
         if not subject_items:
             continue
         mentor_name = f.mentor.user.name if f.mentor and f.mentor.user else None
+
+        enriched_items = []
+        for item in subject_items:
+            task = item.task
+            task_date = task.date
+            if hasattr(task_date, "date"):
+                task_date = task_date.date()
+
+            ai_summary = None
+            signal_light = None
+            density_score = None
+            submission_id = None
+
+            if task.submissions:
+                latest = sorted(task.submissions, key=lambda s: s.submittedAt, reverse=True)[0]
+                submission_id = latest.id
+                if latest.analysis:
+                    ai_summary = latest.analysis.summary
+                    signal_light = latest.analysis.signalLight
+                    density_score = latest.analysis.densityScore
+
+            enriched_items.append({
+                "id": item.id,
+                "taskId": item.taskId,
+                "detail": item.detail,
+                "taskTitle": task.title,
+                "taskDate": task_date,
+                "aiSummary": ai_summary,
+                "signalLight": signal_light,
+                "densityScore": density_score,
+                "submissionId": submission_id,
+            })
+
+        fb_date = f.date
+        if hasattr(fb_date, "date"):
+            fb_date = fb_date.date()
+
         results.append({
             "id": f.id,
-            "date": f.date,
+            "date": fb_date,
             "summary": f.summary,
             "isHighlighted": f.isHighlighted,
             "generalComment": f.generalComment,
             "mentorName": mentor_name,
-            "itemCount": len(subject_items),
+            "items": enriched_items,
         })
     return results
 

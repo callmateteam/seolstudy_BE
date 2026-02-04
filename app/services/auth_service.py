@@ -11,16 +11,16 @@ from app.schemas.auth import SignupRequest
 
 
 async def signup(db: Prisma, data: SignupRequest) -> dict:
-    existing = await db.user.find_unique(where={"email": data.email})
+    existing = await db.user.find_unique(where={"loginId": data.loginId})
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "AUTH_004", "message": "이미 존재하는 이메일입니다"},
+            detail={"code": "AUTH_004", "message": "이미 존재하는 아이디입니다"},
         )
 
     user = await db.user.create(
         data={
-            "email": data.email,
+            "loginId": data.loginId,
             "passwordHash": hash_password(data.password),
             "role": data.role,
             "name": data.name,
@@ -38,18 +38,18 @@ async def signup(db: Prisma, data: SignupRequest) -> dict:
     }
 
 
-async def login(db: Prisma, email: str, password: str) -> dict:
-    user = await db.user.find_unique(where={"email": email})
+async def login(db: Prisma, login_id: str, password: str) -> dict:
+    user = await db.user.find_unique(where={"loginId": login_id})
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "AUTH_001", "message": "잘못된 이메일 또는 비밀번호입니다"},
+            detail={"code": "AUTH_001", "message": "잘못된 아이디 또는 비밀번호입니다"},
         )
 
     if not verify_password(password, user.passwordHash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "AUTH_001", "message": "잘못된 이메일 또는 비밀번호입니다"},
+            detail={"code": "AUTH_001", "message": "잘못된 아이디 또는 비밀번호입니다"},
         )
 
     access_token = create_access_token(subject=user.id, role=user.role)

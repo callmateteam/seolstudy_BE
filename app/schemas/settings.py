@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class ProfileResponse(BaseModel):
     id: str
-    email: str
+    loginId: str
     name: str
     phone: str | None = None
     profileImage: str | None = None

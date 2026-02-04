@@ -5,7 +5,7 @@ from prisma import Prisma
 
 from app.core.deps import get_current_user, get_db
 from app.schemas.common import ErrorResponse, SuccessResponse
-from app.schemas.feedback import FeedbackDetailResponse, FeedbackListItem
+from app.schemas.feedback import FeedbackBySubjectItem, FeedbackDetailResponse
 from app.services import feedback_service
 
 router = APIRouter(prefix="/api/feedback", tags=["Feedback"])
@@ -32,9 +32,9 @@ async def get_feedback_by_date(
 
 @router.get(
     "/by-subject",
-    response_model=SuccessResponse[list[FeedbackListItem]],
+    response_model=SuccessResponse[list[FeedbackBySubjectItem]],
     summary="과목별 피드백 조회",
-    description="특정 과목 관련 피드백을 최신순으로 조회합니다.",
+    description="특정 과목의 피드백을 최신순으로 조회합니다. 과제별 멘토 피드백, AI 분석 요약, 학습 밀도를 포함합니다.",
 )
 async def get_feedback_by_subject(
     menteeId: str,
@@ -43,7 +43,7 @@ async def get_feedback_by_subject(
     db: Prisma = Depends(get_db),
 ):
     results = await feedback_service.get_feedback_by_subject(db, menteeId, subject)
-    return SuccessResponse(data=[FeedbackListItem(**r) for r in results])
+    return SuccessResponse(data=[FeedbackBySubjectItem(**r) for r in results])
 
 
 @router.get(

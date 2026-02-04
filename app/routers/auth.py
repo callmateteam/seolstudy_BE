@@ -20,9 +20,9 @@ router = APIRouter(prefix="/api/auth", tags=["Auth"])
     response_model=SuccessResponse[AuthResponse],
     status_code=status.HTTP_201_CREATED,
     summary="회원가입",
-    description="이메일, 비밀번호, 이름, 역할(MENTEE/MENTOR/PARENT)로 회원가입합니다. 성공 시 JWT 토큰을 발급합니다.",
+    description="아이디, 비밀번호, 이름, 휴대전화, 역할(MENTEE/MENTOR/PARENT)로 회원가입합니다. 성공 시 JWT 토큰을 발급합니다.",
     responses={
-        409: {"model": ErrorResponse, "description": "이미 존재하는 이메일 (AUTH_004)"},
+        409: {"model": ErrorResponse, "description": "이미 존재하는 아이디 (AUTH_004)"},
         422: {"description": "입력값 유효성 검증 실패"},
     },
 )
@@ -41,13 +41,13 @@ async def signup(data: SignupRequest, db: Prisma = Depends(get_db)):
     "/login",
     response_model=SuccessResponse[AuthResponse],
     summary="로그인",
-    description="이메일과 비밀번호로 로그인합니다. 성공 시 JWT access/refresh 토큰을 발급합니다.",
+    description="아이디와 비밀번호로 로그인합니다. 성공 시 JWT access/refresh 토큰을 발급합니다.",
     responses={
-        401: {"model": ErrorResponse, "description": "잘못된 이메일 또는 비밀번호 (AUTH_001)"},
+        401: {"model": ErrorResponse, "description": "잘못된 아이디 또는 비밀번호 (AUTH_001)"},
     },
 )
 async def login(data: LoginRequest, db: Prisma = Depends(get_db)):
-    result = await auth_service.login(db, data.email, data.password)
+    result = await auth_service.login(db, data.loginId, data.password)
     return SuccessResponse(
         data=AuthResponse(
             user=UserResponse.model_validate(result["user"]),

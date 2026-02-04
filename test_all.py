@@ -23,8 +23,8 @@ print("=== Phase 1: Auth + Onboarding ===")
 
 # Signup mentee
 r = client.post("/api/auth/signup", json={
-    "email": f"mentee{ts}@test.com", "password": "test1234",
-    "name": "mentee1", "role": "MENTEE"
+    "loginId": f"mentee{ts}", "password": "test1234",
+    "name": "멘티1", "phone": "01011111111", "role": "MENTEE"
 })
 print(f"[Signup mentee] {r.status_code}")
 assert r.status_code == 201
@@ -32,8 +32,8 @@ tokens["mentee"] = r.json()["data"]["accessToken"]
 
 # Signup mentor
 r = client.post("/api/auth/signup", json={
-    "email": f"mentor{ts}@test.com", "password": "test1234",
-    "name": "mentor1", "role": "MENTOR"
+    "loginId": f"mentor{ts}", "password": "test1234",
+    "name": "멘토1", "phone": "01022222222", "role": "MENTOR"
 })
 print(f"[Signup mentor] {r.status_code}")
 assert r.status_code == 201
@@ -41,15 +41,15 @@ tokens["mentor"] = r.json()["data"]["accessToken"]
 
 # Signup parent
 r = client.post("/api/auth/signup", json={
-    "email": f"parent{ts}@test.com", "password": "test1234",
-    "name": "parent1", "role": "PARENT"
+    "loginId": f"parent{ts}", "password": "test1234",
+    "name": "학부모1", "phone": "01033333333", "role": "PARENT"
 })
 print(f"[Signup parent] {r.status_code}")
 assert r.status_code == 201
 tokens["parent"] = r.json()["data"]["accessToken"]
 
 # Login
-r = client.post("/api/auth/login", json={"email": f"mentee{ts}@test.com", "password": "test1234"})
+r = client.post("/api/auth/login", json={"loginId": f"mentee{ts}", "password": "test1234"})
 print(f"[Login] {r.status_code}")
 assert r.status_code == 200
 
@@ -98,7 +98,7 @@ print(f"[Logout] {r.status_code}")
 assert r.status_code == 204
 
 # Re-login mentee
-r = client.post("/api/auth/login", json={"email": f"mentee{ts}@test.com", "password": "test1234"})
+r = client.post("/api/auth/login", json={"loginId": f"mentee{ts}", "password": "test1234"})
 tokens["mentee"] = r.json()["data"]["accessToken"]
 
 print("--- Phase 1 OK ---\n")
@@ -114,6 +114,37 @@ r = client.post("/api/tasks", headers=h(tokens["mentee"]), json={
 print(f"[Create task] {r.status_code}")
 assert r.status_code == 201
 ids["taskId"] = r.json()["data"]["id"]
+# Verify default values for new fields
+td = r.json()["data"]
+assert td["repeat"] == False
+assert td["repeatDays"] == []
+assert td["targetStudyMinutes"] is None
+assert td["memo"] is None
+print(f"  -> new fields default OK")
+
+# Create repeat task (mentee) — 2026-02-03 is Tuesday
+r = client.post("/api/tasks", headers=h(tokens["mentee"]), json={
+    "date": "2026-02-03", "title": "영어 독해 3회차",
+    "goal": "독해 연습", "subject": "ENGLISH",
+    "repeat": True, "repeatDays": ["MON", "WED", "FRI"],
+    "targetStudyMinutes": 90, "memo": "풀이 과정에 집중하기"
+})
+print(f"[Create repeat task] {r.status_code}")
+assert r.status_code == 201
+rt = r.json()["data"]
+assert rt["repeat"] == True
+assert rt["repeatDays"] == ["MON", "WED", "FRI"]
+assert rt["targetStudyMinutes"] == 90
+assert rt["memo"] == "풀이 과정에 집중하기"
+print(f"  -> repeat fields OK")
+
+# Verify repeat tasks created on MON(02-02), WED(02-04), FRI(02-06)
+for chk_date in ["2026-02-02", "2026-02-04", "2026-02-06"]:
+    r = client.get(f"/api/tasks?menteeId={ids['menteeProfileId']}&date={chk_date}", headers=h(tokens["mentee"]))
+    assert r.status_code == 200
+    found = [t for t in r.json()["data"] if t["title"] == "영어 독해 3회차"]
+    assert len(found) == 1, f"Expected repeat task on {chk_date}"
+print(f"  -> repeat dates (MON/WED/FRI) verified")
 
 # Create task (mentor for mentee)
 r = client.post(f"/api/tasks?menteeId={ids['menteeProfileId']}", headers=h(tokens["mentor"]), json={
@@ -164,10 +195,14 @@ r = client.put(f"/api/submissions/{ids['submissionId']}/self-score", headers=h(t
 print(f"[Self score] {r.status_code}")
 assert r.status_code == 200
 
-# Planner
+# Planner (enhanced)
 r = client.get("/api/planner?date=2026-02-03", headers=h(tokens["mentee"]))
-print(f"[Planner] {r.status_code} tasks={len(r.json()['data']['tasks'])}")
+pd = r.json()["data"]
+print(f"[Planner] {r.status_code} tasks={len(pd['tasks'])} total={pd['totalCount']} completed={pd['completedCount']} yesterdayFb={pd['hasYesterdayFeedback']}")
 assert r.status_code == 200
+assert "totalCount" in pd
+assert "completedCount" in pd
+assert "hasYesterdayFeedback" in pd
 
 # Completion rate
 r = client.get("/api/planner/completion-rate?date=2026-02-03", headers=h(tokens["mentee"]))
@@ -179,17 +214,36 @@ r = client.get("/api/planner/weekly?weekOf=2026-02-03", headers=h(tokens["mentee
 print(f"[Weekly] {r.status_code} days={len(r.json()['data']['days'])}")
 assert r.status_code == 200
 
+# Monthly
+r = client.get("/api/planner/monthly?year=2026&month=2", headers=h(tokens["mentee"]))
+md = r.json()["data"]
+print(f"[Monthly] {r.status_code} year={md['year']} month={md['month']} days={len(md['days'])}")
+assert r.status_code == 200
+assert md["year"] == 2026
+assert md["month"] == 2
+assert len(md["days"]) == 28  # Feb 2026
+
 # Create comment
 r = client.post("/api/planner/comments", headers=h(tokens["mentee"]), json={
     "date": "2026-02-03", "content": "오늘 국어가 어려웠어요"
 })
 print(f"[Create comment] {r.status_code}")
 assert r.status_code == 201
+ids["commentId"] = r.json()["data"]["id"]
 
-# Get comments
+# Mentor reply to comment
+r = client.put(f"/api/planner/comments/{ids['commentId']}/reply", headers=h(tokens["mentor"]), json={
+    "reply": "국어 지문 분석 방법을 다시 확인해보세요"
+})
+print(f"[Reply comment] {r.status_code} reply={r.json()['data']['mentorReply'] is not None}")
+assert r.status_code == 200
+assert r.json()["data"]["mentorReply"] == "국어 지문 분석 방법을 다시 확인해보세요"
+
+# Get comments (with reply)
 r = client.get(f"/api/planner/comments?date=2026-02-03&menteeId={ids['menteeProfileId']}", headers=h(tokens["mentee"]))
 print(f"[Get comments] {r.status_code} count={len(r.json()['data'])}")
 assert r.status_code == 200
+assert r.json()["data"][0]["mentorReply"] is not None
 
 # Yesterday feedback
 r = client.get("/api/planner/yesterday-feedback", headers=h(tokens["mentee"]))
@@ -324,10 +378,23 @@ r = client.get(f"/api/feedback?menteeId={ids['menteeProfileId']}&date=2026-02-03
 print(f"[Feedback by date] {r.status_code} count={len(r.json()['data'])}")
 assert r.status_code == 200
 
-# By subject
+# By subject (enriched with AI analysis)
 r = client.get(f"/api/feedback/by-subject?menteeId={ids['menteeProfileId']}&subject=KOREAN", headers=h(tokens["mentee"]))
-print(f"[Feedback by subject] {r.status_code} count={len(r.json()['data'])}")
+fbs = r.json()["data"]
+print(f"[Feedback by subject] {r.status_code} count={len(fbs)}")
 assert r.status_code == 200
+assert len(fbs) >= 1
+fb = fbs[0]
+assert "items" in fb
+assert len(fb["items"]) >= 1
+item = fb["items"][0]
+assert item["taskTitle"] == "국어 문해력 p.10~15"
+assert item["detail"] == "독해력이 많이 향상되었습니다"
+assert item["submissionId"] is not None
+assert item["signalLight"] in ("GREEN", "YELLOW", "RED")
+assert item["densityScore"] is not None
+assert fb["generalComment"] == "이 조자로 계속 열심히 하세요"
+print(f"  -> items[0] taskTitle={item['taskTitle']} signal={item['signalLight']} density={item['densityScore']}")
 
 # Detail
 r = client.get(f"/api/feedback/{ids['feedbackId']}", headers=h(tokens["mentee"]))

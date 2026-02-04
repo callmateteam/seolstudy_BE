@@ -14,6 +14,18 @@ class TaskCreateRequest(BaseModel):
     )
     materialId: str | None = None
     materialUrl: str | None = None
+    repeat: bool = Field(default=False, description="반복 여부")
+    repeatDays: list[str] | None = Field(
+        default=None,
+        description="반복 요일 (MON,TUE,WED,THU,FRI,SAT,SUN)",
+        examples=[["MON", "WED", "FRI"]],
+    )
+    targetStudyMinutes: int | None = Field(
+        default=None, ge=0, le=1440,
+        description="목표 공부 시간(분)",
+        examples=[90],
+    )
+    memo: str | None = Field(default=None, max_length=1000, examples=["풀이 과정에 집중하기"])
     displayOrder: int = Field(default=0, ge=0)
 
 
@@ -25,6 +37,10 @@ class TaskUpdateRequest(BaseModel):
     materialType: str | None = Field(default=None, pattern="^(COLUMN|PDF)$")
     materialId: str | None = None
     materialUrl: str | None = None
+    repeat: bool | None = None
+    repeatDays: list[str] | None = None
+    targetStudyMinutes: int | None = Field(default=None, ge=0, le=1440)
+    memo: str | None = None
     displayOrder: int | None = Field(default=None, ge=0)
 
 
@@ -47,6 +63,10 @@ class TaskResponse(BaseModel):
     isLocked: bool
     status: str
     studyTimeMinutes: int | None = None
+    repeat: bool = False
+    repeatDays: list[str] = []
+    targetStudyMinutes: int | None = None
+    memo: str | None = None
     createdBy: str
     displayOrder: int
 

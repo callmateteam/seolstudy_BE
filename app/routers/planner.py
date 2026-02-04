@@ -7,9 +7,12 @@ from app.core.deps import get_current_user, get_db
 from app.schemas.common import ErrorResponse, SuccessResponse
 from app.schemas.planner import (
     CommentCreateRequest,
+    CommentReplyRequest,
     CommentResponse,
     CompletionRateResponse,
+    MonthlyResponse,
     PlannerResponse,
+    TodayFeedbackResponse,
     WeeklyResponse,
 )
 from app.schemas.task import TaskResponse
@@ -22,7 +25,7 @@ router = APIRouter(prefix="/api/planner", tags=["Planner"])
     "",
     response_model=SuccessResponse[PlannerResponse],
     summary="날짜별 플래너 조회",
-    description="해당 날짜의 할 일 목록, 코멘트, 완수율을 종합하여 조회합니다.",
+    description="해당 날짜의 할 일 목록, 코멘트, 완수율, 어제 피드백 여부, 오늘 종합 피드백을 종합하여 조회합니다.",
 )
 async def get_planner(
     date: date = Query(..., examples=["2026-02-03"]),
@@ -31,16 +34,31 @@ async def get_planner(
 ):
     if not current_user.menteeProfile:
         return SuccessResponse(
-            data=PlannerResponse(date=date, tasks=[], comments=[], completionRate=0.0)
+            data=PlannerResponse(
+                date=date, tasks=[], comments=[], completionRate=0.0,
+                totalCount=0, completedCount=0,
+                hasYesterdayFeedback=False, yesterdayFeedbackDate=None,
+                todayFeedback=None,
+            )
         )
 
     result = await planner_service.get_planner(db, current_user.menteeProfile.id, date)
+
+    today_feedback = None
+    if result["todayFeedback"]:
+        today_feedback = TodayFeedbackResponse(**result["todayFeedback"])
+
     return SuccessResponse(
         data=PlannerResponse(
             date=result["date"],
             tasks=[TaskResponse.model_validate(t) for t in result["tasks"]],
             comments=[CommentResponse.model_validate(c) for c in result["comments"]],
             completionRate=result["completionRate"],
+            totalCount=result["totalCount"],
+            completedCount=result["completedCount"],
+            hasYesterdayFeedback=result["hasYesterdayFeedback"],
+            yesterdayFeedbackDate=result["yesterdayFeedbackDate"],
+            todayFeedback=today_feedback,
         )
     )
 
@@ -87,6 +105,29 @@ async def get_weekly(
     return SuccessResponse(data=WeeklyResponse(**result))
 
 
+@router.get(
+    "/monthly",
+    response_model=SuccessResponse[MonthlyResponse],
+    summary="월간 캘린더",
+    description="해당 월의 일별 할 일 수, 완료 수, 완수율을 조회합니다.",
+)
+async def get_monthly(
+    year: int = Query(..., ge=2020, le=2030, examples=[2026]),
+    month: int = Query(..., ge=1, le=12, examples=[2]),
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    if not current_user.menteeProfile:
+        return SuccessResponse(
+            data=MonthlyResponse(year=year, month=month, days=[])
+        )
+
+    result = await planner_service.get_monthly(
+        db, current_user.menteeProfile.id, year, month
+    )
+    return SuccessResponse(data=MonthlyResponse(**result))
+
+
 @router.post(
     "/comments",
     response_model=SuccessResponse[CommentResponse],
@@ -110,7 +151,7 @@ async def create_comment(
     "/comments",
     response_model=SuccessResponse[list[CommentResponse]],
     summary="코멘트 조회",
-    description="해당 날짜의 코멘트를 조회합니다. 멘티 본인 또는 담당 멘토가 조회 가능합니다.",
+    description="해당 날짜의 코멘트와 멘토 답변을 조회합니다. 멘티 본인 또는 담당 멘토가 조회 가능합니다.",
 )
 async def get_comments(
     date: date = Query(..., examples=["2026-02-03"]),
@@ -131,6 +172,26 @@ async def get_comments(
     return SuccessResponse(
         data=[CommentResponse.model_validate(c) for c in comments]
     )
+
+
+@router.put(
+    "/comments/{commentId}/reply",
+    response_model=SuccessResponse[CommentResponse],
+    summary="코멘트 답변",
+    description="멘토가 멘티의 코멘트에 답변합니다. 담당 멘티의 코멘트만 답변 가능합니다.",
+    responses={
+        403: {"model": ErrorResponse, "description": "권한 없음 (PERM_001, PERM_002)"},
+        404: {"model": ErrorResponse, "description": "코멘트 없음 (COMMENT_002)"},
+    },
+)
+async def reply_comment(
+    commentId: str,
+    data: CommentReplyRequest,
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    updated = await planner_service.reply_comment(db, current_user, commentId, data)
+    return SuccessResponse(data=CommentResponse.model_validate(updated))
 
 
 @router.get(

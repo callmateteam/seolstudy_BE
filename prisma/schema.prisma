@@ -69,11 +69,11 @@ enum SubmissionType {
 
 model User {
   id           String   @id @default(uuid())
-  email        String   @unique
+  loginId      String   @unique
   passwordHash String
   role         Role
   name         String
-  phone        String?
+  phone        String
   profileImage String?
   nickname     String?
   createdAt    DateTime @default(now())
@@ -141,25 +141,29 @@ model MentorMentee {
 }
 
 model Task {
-  id                String        @id @default(uuid())
-  menteeId          String
-  mentee            MenteeProfile @relation(fields: [menteeId], references: [id])
-  createdByMentorId String?
-  date              DateTime      @db.Date
-  title             String
-  goal              String?
-  subject           Subject
-  abilityTag        String?
-  materialType      MaterialType?
-  materialId        String?
-  materialUrl       String?
-  isLocked          Boolean       @default(false)
-  status            TaskStatus    @default(PENDING)
-  studyTimeMinutes  Int?
-  createdBy         CreatedBy
-  displayOrder      Int           @default(0)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  menteeId           String
+  mentee             MenteeProfile @relation(fields: [menteeId], references: [id])
+  createdByMentorId  String?
+  date               DateTime      @db.Date
+  title              String
+  goal               String?
+  subject            Subject
+  abilityTag         String?
+  materialType       MaterialType?
+  materialId         String?
+  materialUrl        String?
+  isLocked           Boolean       @default(false)
+  status             TaskStatus    @default(PENDING)
+  studyTimeMinutes   Int?
+  repeat             Boolean       @default(false)
+  repeatDays         String[]
+  targetStudyMinutes Int?
+  memo               String?
+  createdBy          CreatedBy
+  displayOrder       Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   submissions   TaskSubmission[]
   feedbackItems FeedbackItem[]
@@ -241,12 +245,14 @@ model FeedbackItem {
 }
 
 model DailyComment {
-  id        String        @id @default(uuid())
-  menteeId  String
-  mentee    MenteeProfile @relation(fields: [menteeId], references: [id])
-  date      DateTime      @db.Date
-  content   String
-  createdAt DateTime      @default(now())
+  id          String        @id @default(uuid())
+  menteeId    String
+  mentee      MenteeProfile @relation(fields: [menteeId], references: [id])
+  date        DateTime      @db.Date
+  content     String
+  mentorReply String?
+  repliedAt   DateTime?
+  createdAt   DateTime      @default(now())
 }
 
 model Material {

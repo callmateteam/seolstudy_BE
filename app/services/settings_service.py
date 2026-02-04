@@ -7,7 +7,7 @@ from app.schemas.settings import MenteeSettingsRequest, MentorSettingsRequest, P
 async def get_profile(user):
     return {
         "id": user.id,
-        "email": user.email,
+        "loginId": user.loginId,
         "name": user.name,
         "phone": user.phone,
         "profileImage": user.profileImage,
@@ -39,7 +39,7 @@ async def update_profile(db: Prisma, user, data: ProfileUpdateRequest):
     )
     return {
         "id": updated.id,
-        "email": updated.email,
+        "loginId": updated.loginId,
         "name": updated.name,
         "phone": updated.phone,
         "profileImage": updated.profileImage,
