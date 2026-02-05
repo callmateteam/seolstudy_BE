@@ -615,7 +615,8 @@ print(f"  -> subjects: {my['subjects']}")
 print(f"  -> subjectStats: {len(my['subjectStats'])} subjects")
 for ss in my["subjectStats"]:
     print(f"     {ss['subject']}: {ss['completedTasks']}/{ss['totalTasks']} ({ss['completionRate']}%)")
-print(f"  -> activity: {my['activitySummary']['activeDays']}days, {my['activitySummary']['totalCompletedTasks']}tasks, {my['activitySummary']['overallCompletionRate']}%")
+act = my['activitySummary']
+print(f"  -> activity: {act['activeDays']}days, streak={act['consecutiveDays']}, {act['totalCompletedTasks']}tasks, {act['totalFeedbacks']}feedbacks, {act['overallCompletionRate']}%")
 
 # Update my page (only name and school)
 r = client.patch("/api/my", headers=h(tokens["mentee"]), json={

@@ -193,6 +193,7 @@ async def _calculate_activity_summary(
     db: Prisma, mentee_id: str
 ) -> ActivitySummary:
     """활동 요약을 계산합니다."""
+    from datetime import date, timedelta
 
     # 전체 과제 조회
     tasks = await db.task.find_many(where={"menteeId": mentee_id})
@@ -207,15 +208,33 @@ async def _calculate_activity_summary(
         else 0.0
     )
 
-    # 활동 일수 계산 (과제가 있는 날짜 수)
+    # 활동 일수 계산 (완료한 과제가 있는 날짜 수)
     active_dates = set()
     for task in tasks:
         if task.status in ("SUBMITTED", "COMPLETED"):
             active_dates.add(task.date)
 
+    # 연속 활동일 계산 (오늘부터 거꾸로)
+    consecutive_days = 0
+    if active_dates:
+        today = date.today()
+        check_date = today
+        # 오늘 또는 어제부터 시작해서 연속 체크
+        if check_date not in active_dates and (check_date - timedelta(days=1)) in active_dates:
+            check_date = check_date - timedelta(days=1)
+
+        while check_date in active_dates:
+            consecutive_days += 1
+            check_date -= timedelta(days=1)
+
+    # 총 피드백 수
+    total_feedbacks = await db.feedback.count(where={"menteeId": mentee_id})
+
     return ActivitySummary(
         activeDays=len(active_dates),
+        consecutiveDays=consecutive_days,
         totalCompletedTasks=completed_tasks,
+        totalFeedbacks=total_feedbacks,
         overallCompletionRate=completion_rate,
     )
 

@@ -23,9 +23,11 @@ class SubjectStat(BaseModel):
 
 class ActivitySummary(BaseModel):
     """활동 요약"""
-    activeDays: int = 0           # 활동 일수
-    totalCompletedTasks: int = 0  # 총 완수 과제
-    overallCompletionRate: float = 0.0  # 전체 달성률 (%)
+    activeDays: int = 0                   # 총 활동 일수
+    consecutiveDays: int = 0              # 연속 활동일
+    totalCompletedTasks: int = 0          # 총 완수 과제
+    totalFeedbacks: int = 0               # 총 피드백 수
+    overallCompletionRate: float = 0.0    # 전체 달성률 (%)
 
 
 class MyPageResponse(BaseModel):
