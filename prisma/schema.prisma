@@ -88,6 +88,7 @@ model MenteeProfile {
   id             String    @id @default(uuid())
   userId         String    @unique
   user           User      @relation(fields: [userId], references: [id])
+  school         String?
   grade          Grade
   subjects       Subject[]
   currentGrades  Json      // { "KOREAN": 3, "ENGLISH": 2, "MATH": 4 }

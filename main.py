@@ -12,6 +12,7 @@ from app.routers import (
     feedback,
     materials,
     mentor,
+    my,
     onboarding,
     parent,
     planner,
@@ -60,6 +61,7 @@ app.include_router(coaching.router)
 app.include_router(feedback.router)
 app.include_router(settings.router)
 app.include_router(wrong_answers.router)
+app.include_router(my.router)
 
 
 @app.get("/health")

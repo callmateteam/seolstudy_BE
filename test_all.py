@@ -60,6 +60,7 @@ assert r.status_code == 200
 
 # Onboarding mentee
 r = client.put("/api/onboarding/mentee", headers=h(tokens["mentee"]), json={
+    "school": "테스트고등학교",
     "grade": "HIGH3", "subjects": ["KOREAN", "MATH"],
     "currentGrades": {"KOREAN": 3, "MATH": 4},
     "targetGrades": {"KOREAN": 1, "MATH": 2}
@@ -594,6 +595,51 @@ print(f"[Mentor settings] {r.status_code}")
 assert r.status_code == 200
 
 print("--- Settings OK ---\n")
+
+# ===== My Page =====
+print("=== My Page ===")
+
+# Get my page (mentee)
+r = client.get("/api/my", headers=h(tokens["mentee"]))
+print(f"[My page mentee] {r.status_code} role={r.json()['data']['role']}")
+assert r.status_code == 200
+my = r.json()["data"]
+assert my["role"] == "MENTEE"
+assert my["school"] == "테스트고등학교"
+assert my["grade"] == "HIGH3"
+assert "subjectStats" in my
+assert "activitySummary" in my
+assert my["mentor"] is not None
+print(f"  -> mentor: {my['mentor']['name']} ({my['mentor']['university']} {my['mentor']['department']})")
+print(f"  -> subjects: {my['subjects']}")
+print(f"  -> subjectStats: {len(my['subjectStats'])} subjects")
+for ss in my["subjectStats"]:
+    print(f"     {ss['subject']}: {ss['completedTasks']}/{ss['totalTasks']} ({ss['completionRate']}%)")
+print(f"  -> activity: {my['activitySummary']['activeDays']}days, {my['activitySummary']['totalCompletedTasks']}tasks, {my['activitySummary']['overallCompletionRate']}%")
+
+# Update my page (only name and school)
+r = client.patch("/api/my", headers=h(tokens["mentee"]), json={
+    "name": "수정된멘티",
+    "school": "수정고등학교"
+})
+print(f"[Update my page] {r.status_code} name={r.json()['data']['name']} school={r.json()['data']['school']}")
+assert r.status_code == 200
+assert r.json()["data"]["name"] == "수정된멘티"
+assert r.json()["data"]["school"] == "수정고등학교"
+
+# Get my page (mentor)
+r = client.get("/api/my", headers=h(tokens["mentor"]))
+print(f"[My page mentor] {r.status_code} role={r.json()['data']['role']}")
+assert r.status_code == 200
+assert r.json()["data"]["role"] == "MENTOR"
+
+# Get my page (parent)
+r = client.get("/api/my", headers=h(tokens["parent"]))
+print(f"[My page parent] {r.status_code} role={r.json()['data']['role']}")
+assert r.status_code == 200
+assert r.json()["data"]["role"] == "PARENT"
+
+print("--- My Page OK ---\n")
 
 client.__exit__(None, None, None)
 

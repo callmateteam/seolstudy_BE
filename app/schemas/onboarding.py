@@ -2,6 +2,12 @@ from pydantic import BaseModel, Field
 
 
 class MenteeOnboardingRequest(BaseModel):
+    school: str | None = Field(
+        default=None,
+        max_length=100,
+        examples=["OO고등학교"],
+        description="학교 이름",
+    )
     grade: str = Field(
         pattern="^(HIGH1|HIGH2|HIGH3|N_REPEAT)$",
         examples=["HIGH2"],
@@ -55,6 +61,7 @@ class ParentOnboardingRequest(BaseModel):
 
 class MenteeProfileResponse(BaseModel):
     id: str
+    school: str | None = None
     grade: str
     subjects: list[str]
     currentGrades: dict

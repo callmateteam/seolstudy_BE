@@ -65,6 +65,7 @@ async def onboard_mentee(db: Prisma, user, data: MenteeOnboardingRequest):
         profile = await db.menteeprofile.update(
             where={"userId": user.id},
             data={
+                "school": data.school,
                 "grade": data.grade,
                 "subjects": data.subjects,
                 "currentGrades": Json(data.currentGrades),
@@ -76,6 +77,7 @@ async def onboard_mentee(db: Prisma, user, data: MenteeOnboardingRequest):
         profile = await db.menteeprofile.create(
             data={
                 "user": {"connect": {"id": user.id}},
+                "school": data.school,
                 "grade": data.grade,
                 "subjects": data.subjects,
                 "currentGrades": Json(data.currentGrades),
