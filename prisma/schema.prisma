@@ -160,6 +160,10 @@ model Task {
   repeatDays         String[]
   targetStudyMinutes Int?
   memo               String?
+  tags               String[]
+  keyPoints          String?
+  content            String?
+  isBookmarked       Boolean       @default(false)
   createdBy          CreatedBy
   displayOrder       Int           @default(0)
   createdAt          DateTime      @default(now())
@@ -167,6 +171,7 @@ model Task {
 
   submissions   TaskSubmission[]
   feedbackItems FeedbackItem[]
+  problems      TaskProblem[]
 }
 
 model TaskSubmission {
@@ -181,9 +186,42 @@ model TaskSubmission {
   selfScoreCorrect Int?
   selfScoreTotal   Int?
   wrongQuestions   Int[]
+  comment          String?
   submittedAt      DateTime       @default(now())
 
-  analysis AiAnalysis?
+  analysis         AiAnalysis?
+  problemResponses ProblemResponse[]
+}
+
+model TaskProblem {
+  id            String    @id @default(uuid())
+  taskId        String
+  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  number        Int
+  title         String
+  content       String?
+  options       Json?
+  correctAnswer String?
+  displayOrder  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  responses ProblemResponse[]
+}
+
+model ProblemResponse {
+  id            String         @id @default(uuid())
+  submissionId  String
+  submission    TaskSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  problemId     String
+  problem       TaskProblem    @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  answer        String?
+  textNote      String?
+  highlightData Json?
+  drawingUrl    String?
+  createdAt     DateTime       @default(now())
+
+  @@unique([submissionId, problemId])
 }
 
 model AiAnalysis {
@@ -194,14 +232,33 @@ model AiAnalysis {
   signalLight  SignalLight?
   densityScore Int?
   writingRatio Float?
-  traceTypes   Json?
+  traceTypes   Json?          // { underlineRatio, memoRatio, solutionRatio }
+  partDensity  Json?          // [{ partNumber, partTitle, density }]
   pageHeatmap  Json?
   summary      String?
+  mentorTip    String?
   retryCount   Int            @default(0)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
   judgment MentorJudgment?
+}
+
+model WrongAnswerSheet {
+  id              String   @id @default(uuid())
+  submissionId    String
+  menteeId        String
+  problemId       String
+  problemNumber   Int
+  problemTitle    String
+  originalAnswer  String?
+  correctAnswer   String?
+  explanation     String?
+  relatedConcepts String[]
+  practiceUrl     String?
+  isCompleted     Boolean  @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
 }
 
 model MentorJudgment {

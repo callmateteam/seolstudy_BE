@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     MAX_PDF_SIZE_MB: int = 20
     ALLOWED_IMAGE_EXTENSIONS: set[str] = {"jpg", "jpeg", "png"}
     ALLOWED_PDF_EXTENSIONS: set[str] = {"pdf"}
+    PRESIGNED_URL_EXPIRE_SECONDS: int = 3600
+
+    # OpenAI
+    OPENAI_API_KEY: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:

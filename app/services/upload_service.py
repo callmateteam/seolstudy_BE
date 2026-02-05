@@ -1,7 +1,9 @@
+import io
 import uuid
 
 import boto3
 from fastapi import HTTPException, UploadFile, status
+from PIL import Image
 
 from app.core.config import settings
 
@@ -28,6 +30,32 @@ def _s3_url(key: str) -> str:
     return f"https://{settings.S3_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
 
 
+def _key_from_url(url: str) -> str:
+    """S3 URL에서 key를 추출합니다."""
+    prefix = f"https://{settings.S3_BUCKET_NAME}.s3.{settings.AWS_REGION}.amazonaws.com/"
+    if url.startswith(prefix):
+        return url[len(prefix):]
+    return url
+
+
+def generate_presigned_url(key: str) -> str:
+    s3 = _get_s3()
+    return s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.S3_BUCKET_NAME, "Key": key},
+        ExpiresIn=settings.PRESIGNED_URL_EXPIRE_SECONDS,
+    )
+
+
+def generate_presigned_url_from_s3_url(s3_url: str) -> dict:
+    key = _key_from_url(s3_url)
+    presigned = generate_presigned_url(key)
+    return {
+        "presignedUrl": presigned,
+        "expiresIn": settings.PRESIGNED_URL_EXPIRE_SECONDS,
+    }
+
+
 async def _upload_to_s3(content: bytes, key: str, content_type: str) -> str:
     s3 = _get_s3()
     s3.put_object(
@@ -37,6 +65,45 @@ async def _upload_to_s3(content: bytes, key: str, content_type: str) -> str:
         ContentType=content_type,
     )
     return _s3_url(key)
+
+
+def _check_image_clarity(content: bytes) -> dict:
+    """이미지 OCR 가독성을 검증합니다."""
+    try:
+        img = Image.open(io.BytesIO(content))
+        width, height = img.size
+
+        if width < 640 or height < 480:
+            return {
+                "ocrReady": False,
+                "ocrMessage": "사진이 선명하지 않아 인증이 어려워요. 해상도가 너무 낮습니다.",
+            }
+
+        if img.mode in ("L", "LA"):
+            gray = img
+        else:
+            gray = img.convert("L")
+
+        pixels = list(gray.getdata())
+        n = len(pixels)
+        mean = sum(pixels) / n
+        variance = sum((p - mean) ** 2 for p in pixels) / n
+
+        if variance < 200:
+            return {
+                "ocrReady": False,
+                "ocrMessage": "사진이 선명하지 않아 인증이 어려워요. 명암 대비가 부족합니다.",
+            }
+
+        return {
+            "ocrReady": True,
+            "ocrMessage": "사진이 선명하게 촬영되었습니다.",
+        }
+    except Exception:
+        return {
+            "ocrReady": False,
+            "ocrMessage": "이미지를 분석할 수 없습니다. 다시 업로드해주세요.",
+        }
 
 
 async def upload_image(file: UploadFile) -> dict:
@@ -89,6 +156,39 @@ async def upload_pdf(file: UploadFile) -> dict:
         "url": url,
         "originalName": file.filename or "",
         "size": len(content),
+    }
+
+
+async def upload_study_photo(file: UploadFile) -> dict:
+    """학습 인증 사진 업로드 + OCR 가독성 검증."""
+    ext = _get_extension(file.filename or "")
+    if ext not in settings.ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "SUBMIT_002", "message": f"지원하지 않는 파일 형식입니다. 허용: {', '.join(settings.ALLOWED_IMAGE_EXTENSIONS)}"},
+        )
+
+    content = await file.read()
+    size_mb = len(content) / (1024 * 1024)
+    if size_mb > settings.MAX_IMAGE_SIZE_MB:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "SUBMIT_003", "message": f"파일 크기가 {settings.MAX_IMAGE_SIZE_MB}MB를 초과합니다"},
+        )
+
+    key = f"study-photos/{uuid.uuid4()}.{ext}"
+    content_type = file.content_type or f"image/{ext}"
+    url = await _upload_to_s3(content, key, content_type)
+
+    ocr_result = _check_image_clarity(content)
+    presigned = generate_presigned_url(key)
+
+    return {
+        "url": url,
+        "presignedUrl": presigned,
+        "originalName": file.filename or "",
+        "size": len(content),
+        **ocr_result,
     }
 
 

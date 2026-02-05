@@ -1,6 +1,15 @@
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+class ProblemResponseCreate(BaseModel):
+    problemId: str
+    answer: str | None = Field(default=None, max_length=1000)
+    textNote: str | None = Field(default=None, max_length=5000)
+    highlightData: dict | None = None
+    drawingUrl: str | None = None
 
 
 class SubmissionCreateRequest(BaseModel):
@@ -17,7 +26,22 @@ class SubmissionCreateRequest(BaseModel):
     images: list[str] | None = Field(
         default=None,
         examples=[["https://s3.../image1.jpg"]],
-        description="DRAWING 모드일 때 S3 이미지 URL 목록",
+        description="학습 인증 사진 S3 URL 목록 (옵셔널)",
+    )
+    studyTimeMinutes: int | None = Field(
+        default=None, ge=0, le=1440,
+        description="공부 시간(분)",
+    )
+    selfScoreCorrect: int | None = Field(default=None, ge=0, description="맞은 문제 수")
+    selfScoreTotal: int | None = Field(default=None, ge=1, description="전체 문제 수")
+    wrongQuestions: list[int] | None = Field(default=None, description="틀린 문제 번호 목록")
+    comment: str | None = Field(
+        default=None, max_length=1000,
+        description="멘토에게 질문/코멘트",
+    )
+    problemResponses: list[ProblemResponseCreate] | None = Field(
+        default=None,
+        description="문제별 응답 (과제에 문제가 있는 경우)",
     )
 
 
@@ -31,6 +55,17 @@ class SelfScoreRequest(BaseModel):
     )
 
 
+class ProblemResponseData(BaseModel):
+    id: str
+    problemId: str
+    answer: str | None = None
+    textNote: str | None = None
+    highlightData: Any | None = None
+    drawingUrl: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class SubmissionResponse(BaseModel):
     id: str
     taskId: str
@@ -41,6 +76,13 @@ class SubmissionResponse(BaseModel):
     selfScoreCorrect: int | None = None
     selfScoreTotal: int | None = None
     wrongQuestions: list[int]
+    comment: str | None = None
+    problemResponses: list[ProblemResponseData] = []
     submittedAt: datetime
+
+    @field_validator("problemResponses", mode="before")
+    @classmethod
+    def _coerce_responses(cls, v):
+        return v if v is not None else []
 
     model_config = {"from_attributes": True}

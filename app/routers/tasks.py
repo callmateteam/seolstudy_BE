@@ -6,8 +6,12 @@ from prisma import Prisma
 from app.core.deps import get_current_user, get_db
 from app.schemas.common import ErrorResponse, SuccessResponse
 from app.schemas.task import (
+    BookmarkRequest,
     StudyTimeRequest,
     TaskCreateRequest,
+    TaskProblemCreateRequest,
+    TaskProblemUpdateRequest,
+    TaskProblemWithAnswerResponse,
     TaskResponse,
     TaskUpdateRequest,
 )
@@ -76,7 +80,7 @@ async def create_task(
     "/{taskId}",
     response_model=SuccessResponse[TaskResponse],
     summary="할 일 상세 조회",
-    description="특정 할 일의 상세 정보를 조회합니다.",
+    description="특정 할 일의 상세 정보를 조회합니다. 문제 목록 포함.",
     responses={
         404: {"model": ErrorResponse, "description": "할 일 없음 (TASK_002)"},
     },
@@ -86,7 +90,7 @@ async def get_task(
     current_user=Depends(get_current_user),
     db: Prisma = Depends(get_db),
 ):
-    task = await task_service.get_task(db, taskId)
+    task = await task_service.get_task_detail(db, taskId)
     return SuccessResponse(data=TaskResponse.model_validate(task))
 
 
@@ -147,3 +151,88 @@ async def update_study_time(
 ):
     task = await task_service.update_study_time(db, current_user, taskId, data.minutes)
     return SuccessResponse(data=TaskResponse.model_validate(task))
+
+
+@router.patch(
+    "/{taskId}/bookmark",
+    response_model=SuccessResponse[TaskResponse],
+    summary="북마크 토글",
+    description="멘티가 과제를 즐겨찾기에 추가/제거합니다.",
+    responses={
+        403: {"model": ErrorResponse, "description": "본인 데이터만 접근 가능 (PERM_002)"},
+        404: {"model": ErrorResponse, "description": "할 일 없음 (TASK_002)"},
+    },
+)
+async def toggle_bookmark(
+    taskId: str,
+    data: BookmarkRequest,
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    task = await task_service.toggle_bookmark(db, current_user, taskId, data.isBookmarked)
+    return SuccessResponse(data=TaskResponse.model_validate(task))
+
+
+# ===== Problem CRUD (Mentor only) =====
+
+
+@router.post(
+    "/{taskId}/problems",
+    response_model=SuccessResponse[TaskProblemWithAnswerResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="문제 추가",
+    description="멘토가 과제에 문제를 추가합니다.",
+    responses={
+        403: {"model": ErrorResponse, "description": "멘토 권한 필요"},
+        404: {"model": ErrorResponse, "description": "할 일 없음 (TASK_002)"},
+    },
+)
+async def add_problem(
+    taskId: str,
+    data: TaskProblemCreateRequest,
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    problem = await task_service.add_problem(db, current_user, taskId, data)
+    return SuccessResponse(data=TaskProblemWithAnswerResponse.model_validate(problem))
+
+
+@router.put(
+    "/{taskId}/problems/{problemId}",
+    response_model=SuccessResponse[TaskProblemWithAnswerResponse],
+    summary="문제 수정",
+    description="멘토가 과제의 문제를 수정합니다.",
+    responses={
+        403: {"model": ErrorResponse, "description": "멘토 권한 필요"},
+        404: {"model": ErrorResponse, "description": "문제 없음 (PROBLEM_001)"},
+    },
+)
+async def update_problem(
+    taskId: str,
+    problemId: str,
+    data: TaskProblemUpdateRequest,
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    problem = await task_service.update_problem(db, current_user, taskId, problemId, data)
+    return SuccessResponse(data=TaskProblemWithAnswerResponse.model_validate(problem))
+
+
+@router.delete(
+    "/{taskId}/problems/{problemId}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="문제 삭제",
+    description="멘토가 과제의 문제를 삭제합니다.",
+    responses={
+        403: {"model": ErrorResponse, "description": "멘토 권한 필요"},
+        404: {"model": ErrorResponse, "description": "문제 없음 (PROBLEM_001)"},
+    },
+)
+async def delete_problem(
+    taskId: str,
+    problemId: str,
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    await task_service.delete_problem(db, current_user, taskId, problemId)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

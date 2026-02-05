@@ -146,24 +146,78 @@ for chk_date in ["2026-02-02", "2026-02-04", "2026-02-06"]:
     assert len(found) == 1, f"Expected repeat task on {chk_date}"
 print(f"  -> repeat dates (MON/WED/FRI) verified")
 
-# Create task (mentor for mentee)
+# Create task (mentor for mentee) — with tags, keyPoints, content, problems
 r = client.post(f"/api/tasks?menteeId={ids['menteeProfileId']}", headers=h(tokens["mentor"]), json={
     "date": "2026-02-03", "title": "수학 미적분 p.32~35",
-    "goal": "미분 개념", "subject": "MATH"
+    "goal": "미분 개념", "subject": "MATH",
+    "tags": ["수학", "미적분", "미분"],
+    "keyPoints": "미분의 정의: lim(h→0) [f(x+h)-f(x)]/h",
+    "content": "다음 함수의 도함수를 구하시오.",
+    "problems": [
+        {"number": 1, "title": "f(x)=x^2의 도함수", "options": [{"label": "1", "text": "2x"}, {"label": "2", "text": "x^2"}], "correctAnswer": "1", "displayOrder": 0},
+        {"number": 2, "title": "f(x)=3x+1의 도함수", "correctAnswer": "3", "displayOrder": 1},
+        {"number": 3, "title": "f(x)=x^3의 도함수", "correctAnswer": "3x^2", "displayOrder": 2},
+    ]
 })
 print(f"[Create task by mentor] {r.status_code}")
 assert r.status_code == 201
-ids["mentorTaskId"] = r.json()["data"]["id"]
+mt = r.json()["data"]
+ids["mentorTaskId"] = mt["id"]
+assert mt["tags"] == ["수학", "미적분", "미분"]
+assert mt["keyPoints"] is not None
+assert mt["problemCount"] == 3
+assert len(mt["problems"]) == 3
+assert mt["problems"][0]["number"] == 1
+# correctAnswer should not appear in TaskProblemResponse (mentee view)
+assert "correctAnswer" not in mt["problems"][0]
+print(f"  -> mentor task: tags={mt['tags']} problems={mt['problemCount']}")
+ids["problemId1"] = mt["problems"][0]["id"]
+ids["problemId2"] = mt["problems"][1]["id"]
+ids["problemId3"] = mt["problems"][2]["id"]
+
+# Add problem (mentor)
+r = client.post(f"/api/tasks/{ids['mentorTaskId']}/problems", headers=h(tokens["mentor"]), json={
+    "number": 4, "title": "f(x)=5의 도함수", "correctAnswer": "0", "displayOrder": 3
+})
+print(f"[Add problem] {r.status_code}")
+assert r.status_code == 201
+ids["problemId4"] = r.json()["data"]["id"]
+assert r.json()["data"]["correctAnswer"] == "0"  # mentor response includes correctAnswer
+
+# Update problem (mentor)
+r = client.put(f"/api/tasks/{ids['mentorTaskId']}/problems/{ids['problemId4']}", headers=h(tokens["mentor"]), json={
+    "title": "f(x)=5의 도함수 (수정됨)"
+})
+print(f"[Update problem] {r.status_code}")
+assert r.status_code == 200
+assert r.json()["data"]["title"] == "f(x)=5의 도함수 (수정됨)"
+
+# Delete problem (mentor)
+r = client.delete(f"/api/tasks/{ids['mentorTaskId']}/problems/{ids['problemId4']}", headers=h(tokens["mentor"]))
+print(f"[Delete problem] {r.status_code}")
+assert r.status_code == 204
+
+# Bookmark toggle (mentee)
+r = client.patch(f"/api/tasks/{ids['mentorTaskId']}/bookmark", headers=h(tokens["mentee"]), json={"isBookmarked": True})
+print(f"[Bookmark on] {r.status_code} bookmarked={r.json()['data']['isBookmarked']}")
+assert r.status_code == 200
+assert r.json()["data"]["isBookmarked"] == True
+
+r = client.patch(f"/api/tasks/{ids['mentorTaskId']}/bookmark", headers=h(tokens["mentee"]), json={"isBookmarked": False})
+print(f"[Bookmark off] {r.status_code} bookmarked={r.json()['data']['isBookmarked']}")
+assert r.status_code == 200
+assert r.json()["data"]["isBookmarked"] == False
 
 # Get tasks
 r = client.get(f"/api/tasks?menteeId={ids['menteeProfileId']}&date=2026-02-03", headers=h(tokens["mentee"]))
 print(f"[Get tasks] {r.status_code} count={len(r.json()['data'])}")
 assert r.status_code == 200
 
-# Get task detail
-r = client.get(f"/api/tasks/{ids['taskId']}", headers=h(tokens["mentee"]))
-print(f"[Task detail] {r.status_code}")
+# Get task detail (mentor task with problems)
+r = client.get(f"/api/tasks/{ids['mentorTaskId']}", headers=h(tokens["mentee"]))
+print(f"[Task detail] {r.status_code} problems={len(r.json()['data']['problems'])}")
 assert r.status_code == 200
+assert r.json()["data"]["problemCount"] == 3  # 4 added - 1 deleted = 3
 
 # Update task
 r = client.put(f"/api/tasks/{ids['taskId']}", headers=h(tokens["mentee"]), json={"goal": "독해 완벽 정리"})
@@ -175,7 +229,7 @@ r = client.patch(f"/api/tasks/{ids['taskId']}/study-time", headers=h(tokens["men
 print(f"[Study time] {r.status_code}")
 assert r.status_code == 200
 
-# Submit (TEXT)
+# Submit (TEXT) — simple task
 r = client.post(f"/api/tasks/{ids['taskId']}/submissions", headers=h(tokens["mentee"]), json={
     "submissionType": "TEXT", "textContent": "풀이 내용입니다..."
 })
@@ -183,12 +237,44 @@ print(f"[Submit TEXT] {r.status_code}")
 assert r.status_code == 201
 ids["submissionId"] = r.json()["data"]["id"]
 
-# Get submissions
+# Submit (mentor task with problemResponses + selfScore + studyTime + comment)
+r = client.post(f"/api/tasks/{ids['mentorTaskId']}/submissions", headers=h(tokens["mentee"]), json={
+    "submissionType": "TEXT",
+    "studyTimeMinutes": 65,
+    "selfScoreCorrect": 2,
+    "selfScoreTotal": 3,
+    "wrongQuestions": [3],
+    "comment": "3번 문제가 어려웠어요",
+    "problemResponses": [
+        {"problemId": ids["problemId1"], "answer": "1", "textNote": "2x가 맞다"},
+        {"problemId": ids["problemId2"], "answer": "3"},
+        {"problemId": ids["problemId3"], "answer": "2x^2", "textNote": "틀렸다", "highlightData": {"ranges": [{"start": 0, "end": 5}]}},
+    ]
+})
+print(f"[Submit with problems] {r.status_code}")
+assert r.status_code == 201
+sub = r.json()["data"]
+assert sub["comment"] == "3번 문제가 어려웠어요"
+assert sub["selfScoreCorrect"] == 2
+assert sub["selfScoreTotal"] == 3
+assert len(sub["problemResponses"]) == 3
+assert sub["problemResponses"][0]["answer"] == "1"
+print(f"  -> responses={len(sub['problemResponses'])} selfScore={sub['selfScoreCorrect']}/{sub['selfScoreTotal']}")
+ids["mentorSubmissionId"] = sub["id"]
+
+# Verify task status updated to SUBMITTED and studyTimeMinutes saved
+r = client.get(f"/api/tasks/{ids['mentorTaskId']}", headers=h(tokens["mentee"]))
+assert r.status_code == 200
+assert r.json()["data"]["status"] == "SUBMITTED"
+assert r.json()["data"]["studyTimeMinutes"] == 65
+print(f"  -> task status=SUBMITTED studyTime=65min")
+
+# Get submissions (includes problemResponses)
 r = client.get(f"/api/tasks/{ids['taskId']}/submissions", headers=h(tokens["mentee"]))
 print(f"[Get submissions] {r.status_code} count={len(r.json()['data'])}")
 assert r.status_code == 200
 
-# Self score
+# Self score (simple task)
 r = client.put(f"/api/submissions/{ids['submissionId']}/self-score", headers=h(tokens["mentee"]), json={
     "selfScoreCorrect": 8, "selfScoreTotal": 10, "wrongQuestions": [3, 7]
 })
@@ -403,6 +489,16 @@ assert r.status_code == 200
 
 print("--- Feedback Query OK ---\n")
 
+# ===== Wrong Answers =====
+print("=== Wrong Answers ===")
+
+# Get wrong answer sheets (empty initially)
+r = client.get("/api/wrong-answers", headers=h(tokens["mentee"]))
+print(f"[Wrong answers list] {r.status_code} count={len(r.json()['data'])}")
+assert r.status_code == 200
+
+print("--- Wrong Answers OK ---\n")
+
 # ===== Phase 4: Parent =====
 print("=== Phase 4: Parent ===")
 
@@ -440,6 +536,36 @@ r = client.post("/api/uploads/validate-image", headers=h(tokens["mentee"]),
 print(f"[Validate image] {r.status_code} valid={r.json()['data']['valid']}")
 assert r.status_code == 200
 
+# Study photo upload (with OCR validation)
+# Create a real-ish PNG image via Pillow for OCR check
+from PIL import Image as PILImage
+study_img = PILImage.new("RGB", (800, 600), color=(255, 255, 255))
+# Draw some contrast (simulate writing on white paper)
+for x in range(100, 700):
+    for y in range(100, 110):
+        study_img.putpixel((x, y), (0, 0, 0))
+buf = io.BytesIO()
+study_img.save(buf, format="PNG")
+study_img_data = buf.getvalue()
+
+r = client.post("/api/uploads/study-photo", headers=h(tokens["mentee"]),
+    files={"file": ("study.png", io.BytesIO(study_img_data), "image/png")})
+print(f"[Study photo] {r.status_code} ocrReady={r.json()['data']['ocrReady']} msg={r.json()['data']['ocrMessage']}")
+assert r.status_code == 201
+sp = r.json()["data"]
+assert "url" in sp
+assert "presignedUrl" in sp
+assert "ocrReady" in sp
+assert "ocrMessage" in sp
+
+# Presigned URL
+r = client.post("/api/uploads/presigned-url", headers=h(tokens["mentee"]),
+    json={"url": sp["url"]})
+print(f"[Presigned URL] {r.status_code} expiresIn={r.json()['data']['expiresIn']}")
+assert r.status_code == 200
+assert r.json()["data"]["expiresIn"] == 3600
+assert "presignedUrl" in r.json()["data"]
+
 print("--- Uploads OK ---\n")
 
 # ===== Settings =====
@@ -471,6 +597,7 @@ print("--- Settings OK ---\n")
 
 client.__exit__(None, None, None)
 
-print("\n========================================")
-print("=== ALL 55 API ENDPOINTS TESTED OK ===")
-print("========================================")
+print("\n=============================================")
+print("=== ALL API ENDPOINTS TESTED OK ===")
+print("=============================================")
+

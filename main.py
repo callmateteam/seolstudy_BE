@@ -19,6 +19,7 @@ from app.routers import (
     submissions,
     tasks,
     uploads,
+    wrong_answers,
 )
 
 
@@ -58,6 +59,7 @@ app.include_router(materials.router)
 app.include_router(coaching.router)
 app.include_router(feedback.router)
 app.include_router(settings.router)
+app.include_router(wrong_answers.router)
 
 
 @app.get("/health")
