@@ -4,6 +4,8 @@ from prisma import Prisma
 from app.core.deps import get_current_user, get_db
 from app.schemas.common import ErrorResponse, SuccessResponse
 from app.schemas.mentor import (
+    CommentQueueItem,
+    CommentReplyRequest,
     DashboardResponse,
     FeedbackCreateRequest,
     FeedbackResponse,
@@ -172,3 +174,44 @@ async def create_feedback(
 ):
     feedback = await mentor_service.create_feedback(db, current_user, data)
     return SuccessResponse(data=FeedbackResponse.model_validate(feedback))
+
+
+# === Comment Reply ===
+
+@router.get(
+    "/comments",
+    response_model=SuccessResponse[list[CommentQueueItem]],
+    summary="코멘트 답변 대기열",
+    description="담당 멘티들의 코멘트 목록을 조회합니다.",
+    responses={403: {"model": ErrorResponse, "description": "멘토 권한 필요"}},
+)
+async def get_comment_queue(
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    result = await mentor_service.get_comment_queue(db, current_user)
+    return SuccessResponse(data=[CommentQueueItem(**c) for c in result])
+
+
+@router.post(
+    "/comments/{commentId}/reply",
+    response_model=SuccessResponse[dict],
+    summary="코멘트 답변",
+    description="멘티의 코멘트에 답변합니다. (최대 500자)",
+    responses={
+        403: {"model": ErrorResponse, "description": "담당 멘티의 코멘트만 답변 가능"},
+        404: {"model": ErrorResponse, "description": "코멘트 없음"},
+    },
+)
+async def reply_to_comment(
+    commentId: str,
+    data: CommentReplyRequest,
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    comment = await mentor_service.reply_to_comment(db, current_user, commentId, data.reply)
+    return SuccessResponse(data={
+        "commentId": comment.id,
+        "mentorReply": comment.mentorReply,
+        "repliedAt": comment.repliedAt,
+    })
