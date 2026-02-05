@@ -38,7 +38,15 @@ def _key_from_url(url: str) -> str:
     return url
 
 
+def _is_mock_mode() -> bool:
+    """CI/테스트 환경에서는 S3 업로드를 mock합니다."""
+    return settings.AWS_ACCESS_KEY_ID == "test" or settings.APP_ENV == "test"
+
+
 def generate_presigned_url(key: str) -> str:
+    if _is_mock_mode():
+        return f"{_s3_url(key)}?mock-presigned=true"
+
     s3 = _get_s3()
     return s3.generate_presigned_url(
         "get_object",
@@ -57,6 +65,9 @@ def generate_presigned_url_from_s3_url(s3_url: str) -> dict:
 
 
 async def _upload_to_s3(content: bytes, key: str, content_type: str) -> str:
+    if _is_mock_mode():
+        return _s3_url(key)
+
     s3 = _get_s3()
     s3.put_object(
         Bucket=settings.S3_BUCKET_NAME,
