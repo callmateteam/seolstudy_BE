@@ -48,12 +48,12 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Generate Prisma Client
+      - name: Generate Prisma Client and Run Migrations
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/seolstudy_test
         run: |
           prisma generate
-          prisma db push --accept-data-loss
+          prisma migrate deploy
 
       - name: Run tests
         env:
@@ -95,7 +95,7 @@ jobs:
 
             # Generate Prisma client and apply migrations
             prisma generate
-            prisma db push --accept-data-loss
+            prisma migrate deploy
 
             # Restart application (using systemd)
             sudo systemctl restart seolstudy
