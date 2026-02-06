@@ -642,6 +642,67 @@ assert r.json()["data"]["role"] == "PARENT"
 
 print("--- My Page OK ---\n")
 
+# ===== Lessons (학습관리) =====
+print("=== Lessons ===")
+
+# Get ability tags
+r = client.get("/api/mentor/lessons/ability-tags?subject=KOREAN", headers=h(tokens["mentor"]))
+print(f"[Ability tags KOREAN] {r.status_code} tags={r.json()['data']['tags']}")
+assert r.status_code == 200
+assert len(r.json()["data"]["tags"]) == 5
+
+# Get all ability tags
+r = client.get("/api/mentor/lessons/ability-tags/all", headers=h(tokens["mentor"]))
+print(f"[All ability tags] {r.status_code} subjects={list(r.json()['data'].keys())}")
+assert r.status_code == 200
+assert "KOREAN" in r.json()["data"]
+assert "ENGLISH" in r.json()["data"]
+assert "MATH" in r.json()["data"]
+
+# Create lesson
+from datetime import date
+today = date.today().isoformat()
+r = client.post("/api/mentor/lessons", headers=h(tokens["mentor"]), json={
+    "menteeId": ids["menteeProfileId"],
+    "date": today,
+    "subject": "KOREAN",
+    "abilityTags": ["문해력", "비문학"],
+    "title": "비문학 독해 연습",
+    "goal": "지문 분석 능력 향상",
+})
+print(f"[Create lesson] {r.status_code} title={r.json()['data']['title']}")
+assert r.status_code == 201
+lesson_id = r.json()["data"]["id"]
+assert r.json()["data"]["abilityTags"] == ["문해력", "비문학"]
+
+# Get lessons
+r = client.get(f"/api/mentor/lessons?menteeId={ids['menteeProfileId']}&date={today}", headers=h(tokens["mentor"]))
+print(f"[Get lessons] {r.status_code} total={r.json()['data']['total']}")
+assert r.status_code == 200
+assert r.json()["data"]["total"] >= 1
+
+# Get lesson detail
+r = client.get(f"/api/mentor/lessons/{lesson_id}", headers=h(tokens["mentor"]))
+print(f"[Lesson detail] {r.status_code} title={r.json()['data']['title']}")
+assert r.status_code == 200
+
+# Update lesson
+r = client.patch(f"/api/mentor/lessons/{lesson_id}", headers=h(tokens["mentor"]), json={
+    "title": "비문학 독해 연습 (수정)",
+    "abilityTags": ["문해력", "비문학", "문학"],
+})
+print(f"[Update lesson] {r.status_code} title={r.json()['data']['title']}")
+assert r.status_code == 200
+assert r.json()["data"]["title"] == "비문학 독해 연습 (수정)"
+assert len(r.json()["data"]["abilityTags"]) == 3
+
+# Delete lesson
+r = client.delete(f"/api/mentor/lessons/{lesson_id}", headers=h(tokens["mentor"]))
+print(f"[Delete lesson] {r.status_code}")
+assert r.status_code == 204
+
+print("--- Lessons OK ---\n")
+
 client.__exit__(None, None, None)
 
 print("\n=============================================")

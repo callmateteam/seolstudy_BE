@@ -10,6 +10,7 @@ from app.routers import (
     auth,
     coaching,
     feedback,
+    lessons,
     materials,
     mentor,
     my,
@@ -62,6 +63,7 @@ app.include_router(feedback.router)
 app.include_router(settings.router)
 app.include_router(wrong_answers.router)
 app.include_router(my.router)
+app.include_router(lessons.router)
 
 
 @app.get("/health")
