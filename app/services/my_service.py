@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from fastapi import HTTPException, status
 from prisma import Prisma
 from prisma.models import User
@@ -18,6 +20,7 @@ async def get_my_page(db: Prisma, user: User) -> MyPageResponse:
         "id": user.id,
         "role": user.role,
         "name": user.name,
+        "avatar": user.avatar or 1,
         "profileImage": user.profileImage,
         "joinedAt": user.createdAt,
     }
@@ -72,7 +75,7 @@ async def _get_mentee_my_page(
     subject_stats = await _calculate_subject_stats(db, mentee.id, mentee.subjects)
 
     # 활동 요약 계산
-    activity_summary = await _calculate_activity_summary(db, mentee.id)
+    activity_summary = await _calculate_mentee_activity(db, mentee.id)
 
     return MyPageResponse(
         **base,
@@ -98,9 +101,15 @@ async def _get_mentor_my_page(
             detail={"code": "MY_001", "message": "멘토 프로필을 찾을 수 없습니다"},
         )
 
+    # 활동 요약 계산
+    activity_summary = await _calculate_mentor_activity(db, mentor.id)
+
     return MyPageResponse(
         **base,
+        university=mentor.university,
+        department=mentor.department,
         subjects=mentor.subjects,
+        activitySummary=activity_summary,
     )
 
 
@@ -189,11 +198,10 @@ async def _calculate_subject_stats(
     return stats
 
 
-async def _calculate_activity_summary(
+async def _calculate_mentee_activity(
     db: Prisma, mentee_id: str
 ) -> ActivitySummary:
-    """활동 요약을 계산합니다."""
-    from datetime import date, timedelta
+    """멘티 활동 요약을 계산합니다."""
 
     # 전체 과제 조회
     tasks = await db.task.find_many(where={"menteeId": mentee_id})
@@ -214,18 +222,8 @@ async def _calculate_activity_summary(
         if task.status in ("SUBMITTED", "COMPLETED"):
             active_dates.add(task.date)
 
-    # 연속 활동일 계산 (오늘부터 거꾸로)
-    consecutive_days = 0
-    if active_dates:
-        today = date.today()
-        check_date = today
-        # 오늘 또는 어제부터 시작해서 연속 체크
-        if check_date not in active_dates and (check_date - timedelta(days=1)) in active_dates:
-            check_date = check_date - timedelta(days=1)
-
-        while check_date in active_dates:
-            consecutive_days += 1
-            check_date -= timedelta(days=1)
+    # 연속 활동일 계산
+    consecutive_days = _calculate_consecutive_days(active_dates)
 
     # 총 피드백 수
     total_feedbacks = await db.feedback.count(where={"menteeId": mentee_id})
@@ -239,18 +237,87 @@ async def _calculate_activity_summary(
     )
 
 
+async def _calculate_mentor_activity(
+    db: Prisma, mentor_id: str
+) -> ActivitySummary:
+    """멘토 활동 요약을 계산합니다."""
+
+    # 멘토가 작성한 피드백 수
+    total_feedbacks = await db.feedback.count(where={"mentorId": mentor_id})
+
+    # 피드백 작성 날짜들 조회
+    feedbacks = await db.feedback.find_many(
+        where={"mentorId": mentor_id},
+        order={"date": "desc"},
+    )
+
+    # 활동 일수 (피드백 작성한 날짜 수)
+    active_dates = {f.date for f in feedbacks}
+
+    # 연속 활동일 계산
+    consecutive_days = _calculate_consecutive_days(active_dates)
+
+    return ActivitySummary(
+        activeDays=len(active_dates),
+        consecutiveDays=consecutive_days,
+        totalCompletedTasks=0,  # 멘토는 과제 완수 개념 없음
+        totalFeedbacks=total_feedbacks,
+        overallCompletionRate=0.0,  # 멘토는 달성률 개념 없음
+    )
+
+
+def _calculate_consecutive_days(active_dates: set) -> int:
+    """연속 활동일을 계산합니다."""
+    if not active_dates:
+        return 0
+
+    today = date.today()
+    check_date = today
+
+    # date 객체로 변환 (datetime인 경우)
+    dates_as_date = set()
+    for d in active_dates:
+        if hasattr(d, 'date'):
+            dates_as_date.add(d.date())
+        else:
+            dates_as_date.add(d)
+
+    # 오늘 또는 어제부터 시작해서 연속 체크
+    if check_date not in dates_as_date:
+        yesterday = check_date - timedelta(days=1)
+        if yesterday in dates_as_date:
+            check_date = yesterday
+        else:
+            return 0
+
+    consecutive = 0
+    while check_date in dates_as_date:
+        consecutive += 1
+        check_date -= timedelta(days=1)
+
+    return consecutive
+
+
 async def update_my_page(
     db: Prisma, user: User, data: MyPageUpdateRequest
 ) -> MyPageResponse:
-    """마이 페이지 정보를 수정합니다. (이름, 학교만 가능)"""
+    """마이 페이지 정보를 수정합니다."""
 
-    update_data = {}
+    user_update = {}
 
     # 이름 수정
     if data.name is not None:
+        user_update["name"] = data.name
+
+    # 아바타 수정
+    if data.avatar is not None:
+        user_update["avatar"] = data.avatar
+
+    # User 업데이트
+    if user_update:
         await db.user.update(
             where={"id": user.id},
-            data={"name": data.name},
+            data=user_update,
         )
 
     # 학교 수정 (멘티만)

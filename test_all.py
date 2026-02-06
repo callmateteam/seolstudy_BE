@@ -605,11 +605,13 @@ print(f"[My page mentee] {r.status_code} role={r.json()['data']['role']}")
 assert r.status_code == 200
 my = r.json()["data"]
 assert my["role"] == "MENTEE"
+assert my["avatar"] == 1  # 기본 아바타
 assert my["school"] == "테스트고등학교"
 assert my["grade"] == "HIGH3"
 assert "subjectStats" in my
 assert "activitySummary" in my
 assert my["mentor"] is not None
+print(f"  -> avatar: {my['avatar']}")
 print(f"  -> mentor: {my['mentor']['name']} ({my['mentor']['university']} {my['mentor']['department']})")
 print(f"  -> subjects: {my['subjects']}")
 print(f"  -> subjectStats: {len(my['subjectStats'])} subjects")
@@ -618,27 +620,47 @@ for ss in my["subjectStats"]:
 act = my['activitySummary']
 print(f"  -> activity: {act['activeDays']}days, streak={act['consecutiveDays']}, {act['totalCompletedTasks']}tasks, {act['totalFeedbacks']}feedbacks, {act['overallCompletionRate']}%")
 
-# Update my page (only name and school)
+# Update my page (name, school, avatar)
 r = client.patch("/api/my", headers=h(tokens["mentee"]), json={
     "name": "수정된멘티",
-    "school": "수정고등학교"
+    "school": "수정고등학교",
+    "avatar": 3
 })
-print(f"[Update my page] {r.status_code} name={r.json()['data']['name']} school={r.json()['data']['school']}")
+print(f"[Update my page] {r.status_code} name={r.json()['data']['name']} school={r.json()['data']['school']} avatar={r.json()['data']['avatar']}")
 assert r.status_code == 200
 assert r.json()["data"]["name"] == "수정된멘티"
 assert r.json()["data"]["school"] == "수정고등학교"
+assert r.json()["data"]["avatar"] == 3
 
-# Get my page (mentor)
+# Get my page (mentor) - with activity summary
 r = client.get("/api/my", headers=h(tokens["mentor"]))
 print(f"[My page mentor] {r.status_code} role={r.json()['data']['role']}")
 assert r.status_code == 200
-assert r.json()["data"]["role"] == "MENTOR"
+mentor_my = r.json()["data"]
+assert mentor_my["role"] == "MENTOR"
+assert mentor_my["avatar"] == 1
+assert mentor_my["university"] == "서울대"
+assert mentor_my["department"] == "교육학과"
+assert "activitySummary" in mentor_my
+assert mentor_my["activitySummary"]["totalFeedbacks"] >= 0
+print(f"  -> avatar: {mentor_my['avatar']}")
+print(f"  -> university: {mentor_my['university']} {mentor_my['department']}")
+print(f"  -> subjects: {mentor_my['subjects']}")
+mentor_act = mentor_my['activitySummary']
+print(f"  -> activity: {mentor_act['activeDays']}days, streak={mentor_act['consecutiveDays']}, {mentor_act['totalFeedbacks']}feedbacks")
+
+# Update mentor avatar
+r = client.patch("/api/my", headers=h(tokens["mentor"]), json={"avatar": 5})
+assert r.status_code == 200
+assert r.json()["data"]["avatar"] == 5
+print(f"[Update mentor avatar] {r.status_code} avatar={r.json()['data']['avatar']}")
 
 # Get my page (parent)
 r = client.get("/api/my", headers=h(tokens["parent"]))
 print(f"[My page parent] {r.status_code} role={r.json()['data']['role']}")
 assert r.status_code == 200
 assert r.json()["data"]["role"] == "PARENT"
+assert r.json()["data"]["avatar"] == 1
 
 print("--- My Page OK ---\n")
 

@@ -36,6 +36,7 @@ class MyPageResponse(BaseModel):
     id: str
     role: str
     name: str
+    avatar: int = 1                       # 아바타 번호 (role + avatar로 이미지 조합)
     profileImage: str | None = None
     joinedAt: datetime
 
@@ -45,14 +46,19 @@ class MyPageResponse(BaseModel):
     subjects: list[str] = []
     mentor: MentorInfo | None = None
 
-    # 과목별 달성률
+    # 멘토 전용 정보
+    university: str | None = None
+    department: str | None = None
+
+    # 과목별 달성률 (멘티)
     subjectStats: list[SubjectStat] = []
 
-    # 활동 요약
+    # 활동 요약 (멘티/멘토 모두)
     activitySummary: ActivitySummary | None = None
 
 
 class MyPageUpdateRequest(BaseModel):
-    """마이 페이지 수정 요청 (이름, 학교만 수정 가능)"""
+    """마이 페이지 수정 요청"""
     name: str | None = Field(default=None, min_length=1, max_length=50)
-    school: str | None = Field(default=None, max_length=100)
+    avatar: int | None = Field(default=None, ge=1, le=20)  # 아바타 번호 (1~20)
+    school: str | None = Field(default=None, max_length=100)  # 멘티 전용
