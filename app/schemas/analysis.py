@@ -28,7 +28,8 @@ class AnalysisResponse(BaseModel):
     traceTypes: Any | None = None       # TraceTypesData
     partDensity: Any | None = None      # list[PartDensityItem]
     pageHeatmap: Any | None = None
-    summary: str | None = None
+    summary: str | None = None          # 1줄 요약
+    detailedAnalysis: str | None = None  # 상세 분석 (최대 1000자)
     mentorTip: str | None = None
     createdAt: datetime
     updatedAt: datetime

@@ -1,18 +1,90 @@
-from fastapi import APIRouter, Depends
+import datetime as dt
+
+from fastapi import APIRouter, Depends, Query, status
 from prisma import Prisma
 
 from app.core.deps import get_current_user, get_db
 from app.schemas.coaching import (
-    AssignMaterialRequest,
     AiDraftResponse,
+    AssignMaterialRequest,
     CoachingDetailResponse,
+    CoachingSessionResponse,
+    DailySummaryRequest,
     RecommendationsResponse,
+    TaskFeedbackRequest,
 )
 from app.schemas.common import ErrorResponse, SuccessResponse
 from app.schemas.task import TaskResponse
 from app.services import coaching_service
 
 router = APIRouter(prefix="/api/coaching", tags=["Coaching Center"])
+
+
+# ===== 코칭센터 세션 (종합 조회) =====
+
+
+@router.get(
+    "/session",
+    response_model=SuccessResponse[CoachingSessionResponse],
+    summary="코칭센터 세션 조회",
+    description="멘티의 특정 날짜 학습 목록, 제출물, AI 분석, 추천 학습지를 종합 조회합니다.",
+    responses={
+        403: {"model": ErrorResponse, "description": "멘토 권한 필요 / 담당 멘티만 가능"},
+        404: {"model": ErrorResponse, "description": "멘티 없음"},
+    },
+)
+async def get_coaching_session(
+    menteeId: str = Query(..., description="멘티 ID"),
+    date: dt.date = Query(..., description="날짜", examples=["2026-02-01"]),
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    result = await coaching_service.get_coaching_session(
+        db, current_user, menteeId, date
+    )
+    return SuccessResponse(data=CoachingSessionResponse(**result))
+
+
+@router.post(
+    "/task-feedback",
+    response_model=SuccessResponse[dict],
+    status_code=status.HTTP_201_CREATED,
+    summary="과제별 상세 피드백 저장",
+    description="과제에 대한 상세 피드백을 저장합니다.",
+    responses={
+        403: {"model": ErrorResponse, "description": "멘토 권한 필요 / 담당 멘티만 가능"},
+        404: {"model": ErrorResponse, "description": "과제 없음"},
+    },
+)
+async def save_task_feedback(
+    data: TaskFeedbackRequest,
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    result = await coaching_service.save_task_feedback(db, current_user, data)
+    return SuccessResponse(data=result)
+
+
+@router.post(
+    "/daily-summary",
+    response_model=SuccessResponse[dict],
+    status_code=status.HTTP_201_CREATED,
+    summary="학습 총평 저장",
+    description="해당 날짜의 학습 총평을 저장합니다.",
+    responses={
+        403: {"model": ErrorResponse, "description": "멘토 권한 필요 / 담당 멘티만 가능"},
+    },
+)
+async def save_daily_summary(
+    data: DailySummaryRequest,
+    current_user=Depends(get_current_user),
+    db: Prisma = Depends(get_db),
+):
+    result = await coaching_service.save_daily_summary(db, current_user, data)
+    return SuccessResponse(data=result)
+
+
+# ===== 기존 제출물 기반 API =====
 
 
 @router.get(

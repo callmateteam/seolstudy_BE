@@ -2,7 +2,7 @@ import asyncio
 import random
 
 from fastapi import HTTPException, status
-from prisma import Prisma
+from prisma import Json, Prisma
 
 
 async def trigger_analysis(db: Prisma, submission_id: str):
@@ -40,11 +40,63 @@ async def trigger_analysis(db: Prisma, submission_id: str):
     return {"analysisId": analysis_id, "status": "PROCESSING"}
 
 
+def _generate_detailed_analysis(signal: str, score: int, trace_types: dict) -> str:
+    """상세 분석 텍스트 생성 (최대 1000자)"""
+    underline = trace_types.get("underlineRatio", 0)
+    memo = trace_types.get("memoRatio", 0)
+    solution = trace_types.get("solutionRatio", 0)
+
+    if signal == "GREEN":
+        return (
+            f"전체 학습 밀도 점수는 {score}점으로 매우 우수합니다. "
+            f"형광펜/밑줄 비율이 {underline:.1f}%로 핵심 내용을 잘 파악하고 있으며, "
+            f"메모/요약 비율 {memo:.1f}%, 풀이 과정 비율 {solution:.1f}%로 "
+            "전반적으로 꼼꼼하게 학습한 흔적이 보입니다. "
+            "특히 풀이 과정을 상세히 기록하여 이해도가 높아 보입니다. "
+            "이 조자로 계속 학습을 이어가면 좋겠습니다. "
+            "다음 학습에서도 동일한 방식으로 진행해 주세요."
+        )
+    elif signal == "YELLOW":
+        return (
+            f"전체 학습 밀도 점수는 {score}점으로 보통 수준입니다. "
+            f"형광펜/밑줄 비율이 {underline:.1f}%로 일부 핵심 내용을 표시했지만, "
+            f"메모/요약 비율 {memo:.1f}%, 풀이 과정 비율 {solution:.1f}%로 "
+            "보충이 필요한 부분이 있습니다. "
+            "특히 풀이 과정을 더 상세히 기록하면 이해도 향상에 도움이 됩니다. "
+            "다음 학습에서는 중요 개념을 메모하고 풀이 과정을 빠짐없이 적어보세요."
+        )
+    else:
+        return (
+            f"전체 학습 밀도 점수는 {score}점으로 개선이 필요합니다. "
+            f"형광펜/밑줄 비율이 {underline:.1f}%로 핵심 내용 파악이 부족하며, "
+            f"메모/요약 비율 {memo:.1f}%, 풀이 과정 비율 {solution:.1f}%로 "
+            "학습 흔적이 충분하지 않습니다. "
+            "문제를 풀 때는 반드시 풀이 과정을 적고, 중요 부분에 형광펜 표시를 해주세요. "
+            "이해가 어려운 부분은 메모를 남겨 멘토와 함께 점검하면 좋겠습니다. "
+            "다음 학습에서는 더 꼼꼼히 학습해 주세요."
+        )
+
+
 async def run_analysis_background(db: Prisma, analysis_id: str):
     """Background task that simulates AI analysis."""
     await asyncio.sleep(2)
 
     try:
+        # 분석 및 관련 데이터 조회
+        analysis = await db.aianalysis.find_unique(
+            where={"id": analysis_id},
+            include={
+                "submission": {
+                    "include": {
+                        "task": {"include": {"problems": True}},
+                        "problemResponses": True,
+                    }
+                }
+            },
+        )
+        if not analysis:
+            return
+
         lights = ["GREEN", "YELLOW", "RED"]
         weights = [0.5, 0.35, 0.15]
         signal = random.choices(lights, weights=weights, k=1)[0]
@@ -54,16 +106,47 @@ async def run_analysis_background(db: Prisma, analysis_id: str):
         score = random.randint(lo, hi)
         writing_ratio = round(random.uniform(20.0, 95.0), 1)
 
-        analysis = await db.aianalysis.update(
+        # 풀이 흔적 유형별 비율 (mock)
+        trace_types = {
+            "underlineRatio": round(random.uniform(10.0, 80.0), 1),
+            "memoRatio": round(random.uniform(5.0, 50.0), 1),
+            "solutionRatio": round(random.uniform(20.0, 90.0), 1),
+        }
+
+        # 문제별 밀도 분석 (mock)
+        part_density = []
+        if analysis.submission and analysis.submission.task:
+            problems = analysis.submission.task.problems or []
+            for prob in problems:
+                part_density.append({
+                    "problemNumber": prob.number,
+                    "problemTitle": prob.title[:50] if len(prob.title) > 50 else prob.title,
+                    "density": random.randint(max(0, score - 20), min(100, score + 20)),
+                })
+
+        # 상세 분석 텍스트 생성
+        detailed_analysis = _generate_detailed_analysis(signal, score, trace_types)
+
+        # 멘토 팁 생성
+        mentor_tips = {
+            "GREEN": "학습 밀도가 높습니다. 칭찬과 함께 다음 단계 학습을 제안해 보세요.",
+            "YELLOW": "일부 보완이 필요합니다. 부족한 부분에 대해 구체적인 피드백을 주세요.",
+            "RED": "학습 밀도가 낮습니다. 학습 방법에 대한 안내가 필요해 보입니다.",
+        }
+
+        await db.aianalysis.update(
             where={"id": analysis_id},
             data={
                 "status": "COMPLETED",
                 "signalLight": signal,
                 "densityScore": score,
                 "writingRatio": writing_ratio,
-                "summary": f"학습 밀도 분석 완료. 신호등: {signal}, 점수: {score}점",
+                "traceTypes": Json(trace_types),
+                "partDensity": Json(part_density),
+                "summary": f"밀도 {score}점 - {'높은 학습!' if signal == 'GREEN' else '보통' if signal == 'YELLOW' else '보완 필요'}",
+                "detailedAnalysis": detailed_analysis,
+                "mentorTip": mentor_tips.get(signal, ""),
             },
-            include={"submission": True},
         )
 
         if analysis.submission:

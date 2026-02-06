@@ -642,6 +642,64 @@ assert r.json()["data"]["role"] == "PARENT"
 
 print("--- My Page OK ---\n")
 
+# ===== Coaching Center (코칭센터) =====
+print("=== Coaching Center ===")
+
+# Get coaching session
+r = client.get(f"/api/coaching/session?menteeId={ids['menteeProfileId']}&date=2026-02-03", headers=h(tokens["mentor"]))
+print(f"[Coaching session] {r.status_code}")
+assert r.status_code == 200
+session = r.json()["data"]
+assert session["mentee"]["id"] == ids["menteeProfileId"]
+assert session["date"] == "2026-02-03"
+assert len(session["tasks"]) >= 1
+print(f"  -> mentee: {session['mentee']['name']}")
+print(f"  -> tasks: {len(session['tasks'])}")
+for t in session["tasks"][:2]:
+    print(f"     - {t['title']} ({t['status']})")
+    if t["submission"]:
+        print(f"       submission: comment={t['submission'].get('comment')}")
+    if t["analysis"]:
+        print(f"       analysis: score={t['analysis']['densityScore']} signal={t['analysis']['signalLight']}")
+        if t["analysis"].get("detailedAnalysis"):
+            print(f"       detailedAnalysis: {t['analysis']['detailedAnalysis'][:50]}...")
+    if t["recommendedMaterials"]:
+        print(f"       recommended: {len(t['recommendedMaterials'])} materials")
+
+# Save task feedback
+r = client.post("/api/coaching/task-feedback", headers=h(tokens["mentor"]), json={
+    "taskId": ids["taskId"],
+    "detail": "독해력이 향상되고 있습니다. 지문 분석 시 핵심 문장에 밑줄을 긋는 습관을 들이세요."
+})
+print(f"[Task feedback] {r.status_code}")
+assert r.status_code == 201
+assert r.json()["data"]["taskId"] == ids["taskId"]
+print(f"  -> feedbackItemId: {r.json()['data']['feedbackItemId']}")
+
+# Save daily summary
+r = client.post("/api/coaching/daily-summary", headers=h(tokens["mentor"]), json={
+    "menteeId": ids["menteeProfileId"],
+    "date": "2026-02-03",
+    "generalComment": "오늘 학습 잘 진행되었습니다. 국어 독해 실력이 향상되고 있어요!"
+})
+print(f"[Daily summary] {r.status_code}")
+assert r.status_code == 201
+assert r.json()["data"]["generalComment"] == "오늘 학습 잘 진행되었습니다. 국어 독해 실력이 향상되고 있어요!"
+print(f"  -> feedbackId: {r.json()['data']['feedbackId']}")
+
+# Verify session now includes saved feedback
+r = client.get(f"/api/coaching/session?menteeId={ids['menteeProfileId']}&date=2026-02-03", headers=h(tokens["mentor"]))
+assert r.status_code == 200
+session2 = r.json()["data"]
+assert session2["dailySummary"] == "오늘 학습 잘 진행되었습니다. 국어 독해 실력이 향상되고 있어요!"
+# Find task with detailFeedback
+task_with_fb = next((t for t in session2["tasks"] if t["id"] == ids["taskId"]), None)
+assert task_with_fb is not None
+assert task_with_fb["detailFeedback"] is not None
+print(f"[Session with feedback] verified dailySummary and detailFeedback")
+
+print("--- Coaching Center OK ---\n")
+
 # ===== Lessons (학습관리) =====
 print("=== Lessons ===")
 
