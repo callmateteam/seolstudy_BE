@@ -5,14 +5,16 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ProblemResponseCreate(BaseModel):
-    problemId: str
-    answer: str | None = Field(default=None, max_length=1000)
-    textNote: str | None = Field(default=None, max_length=5000)
-    highlightData: dict | None = None
-    drawingUrl: str | None = None
+    """문제별 응답 생성"""
+    problemId: str = Field(description="문제 ID")
+    answer: str | None = Field(default=None, max_length=1000, description="선택한 답")
+    textNote: str | None = Field(default=None, max_length=5000, description="텍스트 메모")
+    highlightData: dict | None = Field(default=None, description="형광펜 위치 데이터 (JSON)")
+    drawingUrl: str | None = Field(default=None, description="그림 이미지 S3 URL")
 
 
 class SubmissionCreateRequest(BaseModel):
+    """제출물 생성 요청"""
     submissionType: str = Field(
         pattern="^(TEXT|DRAWING)$",
         examples=["TEXT"],
@@ -26,14 +28,14 @@ class SubmissionCreateRequest(BaseModel):
     images: list[str] | None = Field(
         default=None,
         examples=[["https://s3.../image1.jpg"]],
-        description="학습 인증 사진 S3 URL 목록 (옵셔널)",
+        description="학습 인증 사진 S3 URL 목록",
     )
     studyTimeMinutes: int | None = Field(
         default=None, ge=0, le=1440,
-        description="공부 시간(분)",
+        description="공부 시간 (분)",
     )
-    selfScoreCorrect: int | None = Field(default=None, ge=0, description="맞은 문제 수")
-    selfScoreTotal: int | None = Field(default=None, ge=1, description="전체 문제 수")
+    selfScoreCorrect: int | None = Field(default=None, ge=0, description="자기채점 맞은 문제 수")
+    selfScoreTotal: int | None = Field(default=None, ge=1, description="자기채점 전체 문제 수")
     wrongQuestions: list[int] | None = Field(default=None, description="틀린 문제 번호 목록")
     comment: str | None = Field(
         default=None, max_length=1000,
@@ -46,6 +48,7 @@ class SubmissionCreateRequest(BaseModel):
 
 
 class SelfScoreRequest(BaseModel):
+    """자기채점 요청"""
     selfScoreCorrect: int = Field(ge=0, examples=[8], description="맞은 문제 수")
     selfScoreTotal: int = Field(ge=1, examples=[10], description="전체 문제 수")
     wrongQuestions: list[int] = Field(
@@ -56,29 +59,31 @@ class SelfScoreRequest(BaseModel):
 
 
 class ProblemResponseData(BaseModel):
-    id: str
-    problemId: str
-    answer: str | None = None
-    textNote: str | None = None
-    highlightData: Any | None = None
-    drawingUrl: str | None = None
+    """문제별 응답 데이터"""
+    id: str = Field(description="응답 ID")
+    problemId: str = Field(description="문제 ID")
+    answer: str | None = Field(default=None, description="선택한 답")
+    textNote: str | None = Field(default=None, description="텍스트 메모")
+    highlightData: Any | None = Field(default=None, description="형광펜 위치 데이터")
+    drawingUrl: str | None = Field(default=None, description="그림 이미지 S3 URL")
 
     model_config = {"from_attributes": True}
 
 
 class SubmissionResponse(BaseModel):
-    id: str
-    taskId: str
-    menteeId: str
-    submissionType: str
-    textContent: str | None = None
-    images: list[str]
-    selfScoreCorrect: int | None = None
-    selfScoreTotal: int | None = None
-    wrongQuestions: list[int]
-    comment: str | None = None
-    problemResponses: list[ProblemResponseData] = []
-    submittedAt: datetime
+    """제출물 응답"""
+    id: str = Field(description="제출물 ID")
+    taskId: str = Field(description="과제 ID")
+    menteeId: str = Field(description="멘티 프로필 ID")
+    submissionType: str = Field(description="제출 유형 (TEXT/DRAWING)")
+    textContent: str | None = Field(default=None, description="텍스트 제출 내용")
+    images: list[str] = Field(description="학습 인증 사진 URL 목록")
+    selfScoreCorrect: int | None = Field(default=None, description="자기채점 맞은 문제 수")
+    selfScoreTotal: int | None = Field(default=None, description="자기채점 전체 문제 수")
+    wrongQuestions: list[int] = Field(description="틀린 문제 번호 목록")
+    comment: str | None = Field(default=None, description="멘토에게 남긴 질문/코멘트")
+    problemResponses: list[ProblemResponseData] = Field(default=[], description="문제별 응답 목록")
+    submittedAt: datetime = Field(description="제출 일시")
 
     @field_validator("problemResponses", mode="before")
     @classmethod
