@@ -3,6 +3,8 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from prisma import Prisma
 
+from app.schemas.parent import MentorBasicInfo
+
 
 def _today_utc() -> datetime:
     t = date.today()
@@ -40,19 +42,43 @@ async def get_dashboard(db: Prisma, user):
     total = len(tasks)
     completed = sum(1 for t in tasks if t.status in ("SUBMITTED", "COMPLETED"))
 
-    # Find mentor
+    # Find mentor with avatar
     link = await db.mentormentee.find_first(
         where={"menteeId": mentee.id},
         include={"mentor": {"include": {"user": True}}},
     )
-    mentor_name = None
+    mentor_info = None
     if link and link.mentor and link.mentor.user:
-        mentor_name = link.mentor.user.name
+        mentor_info = MentorBasicInfo(
+            id=link.mentor.id,
+            name=link.mentor.user.name,
+            avatar=link.mentor.user.avatar or 1,
+            university=link.mentor.university or "",
+            department=link.mentor.department or "",
+        )
 
     # Recent feedback count (last 7 days)
     week_ago = today - timedelta(days=7)
     feedbacks = await db.feedback.find_many(
         where={"menteeId": mentee.id, "date": {"gte": week_ago}},
+    )
+
+    # Calculate weekly density score from AI analysis
+    monday = today - timedelta(days=today.weekday())
+    week_submissions = await db.tasksubmission.find_many(
+        where={
+            "task": {"menteeId": mentee.id, "date": {"gte": monday}},
+        },
+        include={"analysis": True},
+    )
+    density_scores = []
+    for sub in week_submissions:
+        if sub.analysis and sub.analysis.densityScore is not None:
+            density_scores.append(sub.analysis.densityScore)
+    weekly_density = (
+        round(sum(density_scores) / len(density_scores), 1)
+        if density_scores
+        else None
     )
 
     return {
@@ -62,7 +88,8 @@ async def get_dashboard(db: Prisma, user):
         "todayTaskCount": total,
         "todayCompletedCount": completed,
         "todayCompletionRate": round(completed / total, 2) if total > 0 else 0.0,
-        "mentorName": mentor_name,
+        "weeklyDensityScore": weekly_density,
+        "mentor": mentor_info,
         "recentFeedbackCount": len(feedbacks),
     }
 
@@ -72,6 +99,7 @@ async def get_mentee_status(db: Prisma, user):
 
     today = date.today()
     monday = today - timedelta(days=today.weekday())
+    monday_dt = _date_to_utc(monday)
     weekly_rates = []
     total_week = 0
     completed_week = 0
@@ -91,10 +119,28 @@ async def get_mentee_status(db: Prisma, user):
             "rate": round(c / t, 2) if t > 0 else 0.0,
         })
 
+    # Calculate weekly density score from AI analysis
+    week_submissions = await db.tasksubmission.find_many(
+        where={
+            "task": {"menteeId": mentee.id, "date": {"gte": monday_dt}},
+        },
+        include={"analysis": True},
+    )
+    density_scores = []
+    for sub in week_submissions:
+        if sub.analysis and sub.analysis.densityScore is not None:
+            density_scores.append(sub.analysis.densityScore)
+    weekly_density = (
+        round(sum(density_scores) / len(density_scores), 1)
+        if density_scores
+        else None
+    )
+
     return {
         "weeklyCompletionRates": weekly_rates,
         "totalTasksThisWeek": total_week,
         "completedTasksThisWeek": completed_week,
+        "weeklyDensityScore": weekly_density,
     }
 
 
@@ -110,6 +156,7 @@ async def get_mentor_info(db: Prisma, user):
         return {
             "mentorId": None,
             "mentorName": None,
+            "avatar": 1,
             "university": None,
             "department": None,
             "subjects": [],
@@ -129,6 +176,7 @@ async def get_mentor_info(db: Prisma, user):
     return {
         "mentorId": mentor.id,
         "mentorName": mentor.user.name if mentor.user else None,
+        "avatar": mentor.user.avatar if mentor.user else 1,
         "university": mentor.university,
         "department": mentor.department,
         "subjects": mentor.subjects,
