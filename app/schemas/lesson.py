@@ -76,12 +76,20 @@ class LessonListResponse(BaseModel):
     total: int
 
 
+class ParsedProblem(BaseModel):
+    """GPT가 PDF에서 추출한 개별 문제"""
+    number: int = Field(description="문제 번호")
+    title: str = Field(description="문제 제목/질문")
+    content: str | None = Field(default=None, description="보조 지문이나 <보기>")
+    options: list[dict] | None = Field(default=None, description="객관식 선지 목록")
+    correctAnswer: str | None = Field(default=None, description="정답 (있는 경우)")
+
+
 class LessonUploadResponse(BaseModel):
     """학습지 업로드 응답"""
-    materialUrl: str
-    originalName: str
-    size: int
-    # 향후 지문/문제 분리 결과
-    parsed: bool = False
-    content: str | None = None      # 지문 내용 (OCR 추출)
-    problems: list[dict] | None = None  # 문제 목록
+    materialUrl: str = Field(description="S3 업로드 URL")
+    originalName: str = Field(description="원본 파일명")
+    size: int = Field(description="파일 크기 (bytes)")
+    parsed: bool = Field(default=False, description="지문/문제 자동 분리 성공 여부")
+    content: str | None = Field(default=None, description="추출된 지문/본문 텍스트")
+    problems: list[ParsedProblem] | None = Field(default=None, description="추출된 문제 목록")

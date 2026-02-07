@@ -14,7 +14,7 @@ from app.schemas.lesson import (
     LessonUpdateRequest,
     LessonUploadResponse,
 )
-from app.services import lesson_service, upload_service
+from app.services import lesson_service, pdf_parser_service, upload_service
 
 router = APIRouter(prefix="/api/mentor/lessons", tags=["Lessons"])
 
@@ -143,7 +143,7 @@ async def delete_lesson(
     response_model=SuccessResponse[LessonUploadResponse],
     status_code=status.HTTP_201_CREATED,
     summary="학습지 업로드",
-    description="PDF 학습지를 업로드합니다. 향후 지문/문제 분리 기능이 추가될 예정입니다.",
+    description="PDF 학습지를 업로드하고 GPT-4o로 지문/문제를 자동 분리합니다.",
     responses={
         400: {"model": ErrorResponse, "description": "파일 형식 또는 크기 오류"},
     },
@@ -162,16 +162,17 @@ async def upload_lesson_material(
 
     result = await upload_service.upload_pdf(file)
 
-    # TODO: OCR/AI를 통한 지문/문제 분리
-    # 현재는 업로드만 수행하고, 파싱 기능은 향후 구현
+    # GPT-4o로 지문/문제 자동 분리
+    parsed = await pdf_parser_service.parse_pdf_content(result["rawBytes"])
+    has_content = bool(parsed.get("content")) or bool(parsed.get("problems"))
 
     return SuccessResponse(
         data=LessonUploadResponse(
             materialUrl=result["url"],
             originalName=result["originalName"],
             size=result["size"],
-            parsed=False,
-            content=None,
-            problems=None,
+            parsed=has_content,
+            content=parsed.get("content") or None,
+            problems=parsed.get("problems") or None,
         )
     )

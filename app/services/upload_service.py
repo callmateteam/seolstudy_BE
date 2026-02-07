@@ -167,6 +167,7 @@ async def upload_pdf(file: UploadFile) -> dict:
         "url": url,
         "originalName": file.filename or "",
         "size": len(content),
+        "rawBytes": content,
     }
 
 
