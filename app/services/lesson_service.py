@@ -1,13 +1,18 @@
+import logging
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from prisma import Prisma
+from prisma import Json, Prisma
 
 from app.schemas.lesson import (
     ABILITY_TAGS,
     LessonCreateRequest,
+    LessonProblemCreate,
     LessonUpdateRequest,
 )
+from app.services.upload_service import load_parsed_json
+
+logger = logging.getLogger(__name__)
 
 
 def _date_to_utc(d) -> datetime:
@@ -57,6 +62,28 @@ async def create_lesson(db: Prisma, user, data: LessonCreateRequest):
             detail={"code": "LESSON_002", "message": "역량 태그는 최대 3개까지 가능합니다"},
         )
 
+    # materialUrl은 있지만 content/problems가 없으면 S3에서 자동 로드
+    content = data.content
+    problems = data.problems
+    if data.materialUrl and not content and not problems:
+        parsed = load_parsed_json(data.materialUrl)
+        if parsed:
+            logger.info("Auto-loaded parsed data for %s", data.materialUrl)
+            content = parsed.get("content") or content
+            raw_problems = parsed.get("problems")
+            if raw_problems:
+                problems = [
+                    LessonProblemCreate(
+                        number=p.get("number", i + 1),
+                        title=p.get("title", ""),
+                        content=p.get("content"),
+                        options=p.get("options"),
+                        correctAnswer=p.get("correctAnswer"),
+                        displayOrder=p.get("displayOrder", i),
+                    )
+                    for i, p in enumerate(raw_problems)
+                ]
+
     task = await db.task.create(
         data={
             "menteeId": data.menteeId,
@@ -70,10 +97,34 @@ async def create_lesson(db: Prisma, user, data: LessonCreateRequest):
             "materialId": data.materialId,
             "materialUrl": data.materialUrl,
             "materialType": "PDF" if data.materialUrl or data.materialId else None,
+            "content": content,
+            "targetStudyMinutes": data.targetStudyMinutes,
+            "isLocked": True,
             "createdBy": "MENTOR",
             "status": "PENDING",
-        }
+        },
+        include={"problems": True},
     )
+
+    # 문제 생성 (PDF 자동 추출, S3 자동 로드, 또는 직접 입력)
+    if problems:
+        for p in problems:
+            create_data: dict = {
+                "task": {"connect": {"id": task.id}},
+                "number": p.number,
+                "title": p.title,
+                "content": p.content,
+                "correctAnswer": p.correctAnswer,
+                "displayOrder": p.displayOrder,
+            }
+            if p.options is not None:
+                create_data["options"] = Json(p.options)
+            await db.taskproblem.create(data=create_data)
+
+        task = await db.task.find_unique(
+            where={"id": task.id},
+            include={"problems": {"order_by": {"displayOrder": "asc"}}},
+        )
 
     return _task_to_lesson_response(task)
 
@@ -95,6 +146,7 @@ async def get_lessons(
             "createdBy": "MENTOR",
         },
         order={"createdAt": "desc"},
+        include={"problems": {"order_by": {"displayOrder": "asc"}}},
     )
 
     return {
@@ -107,7 +159,10 @@ async def get_lesson(db: Prisma, user, lesson_id: str):
     """학습 상세를 조회합니다."""
     profile = await _require_mentor_profile(user)
 
-    task = await db.task.find_unique(where={"id": lesson_id})
+    task = await db.task.find_unique(
+        where={"id": lesson_id},
+        include={"problems": {"order_by": {"displayOrder": "asc"}}},
+    )
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -153,11 +208,21 @@ async def update_lesson(db: Prisma, user, lesson_id: str, data: LessonUpdateRequ
         update_data["materialId"] = data.materialId
     if data.materialUrl is not None:
         update_data["materialUrl"] = data.materialUrl
+    if data.content is not None:
+        update_data["content"] = data.content
+    if data.targetStudyMinutes is not None:
+        update_data["targetStudyMinutes"] = data.targetStudyMinutes
 
     if update_data:
         task = await db.task.update(
             where={"id": lesson_id},
             data=update_data,
+            include={"problems": {"order_by": {"displayOrder": "asc"}}},
+        )
+    else:
+        task = await db.task.find_unique(
+            where={"id": lesson_id},
+            include={"problems": {"order_by": {"displayOrder": "asc"}}},
         )
 
     return _task_to_lesson_response(task)
@@ -189,6 +254,9 @@ async def delete_lesson(db: Prisma, user, lesson_id: str):
 
 def _task_to_lesson_response(task):
     """Task를 LessonResponse 형식으로 변환"""
+    problems = []
+    if hasattr(task, "problems") and task.problems:
+        problems = task.problems
     return {
         "id": task.id,
         "menteeId": task.menteeId,
@@ -199,6 +267,10 @@ def _task_to_lesson_response(task):
         "goal": task.goal,
         "materialId": task.materialId,
         "materialUrl": task.materialUrl,
+        "content": task.content,
+        "targetStudyMinutes": task.targetStudyMinutes,
+        "problems": problems,
+        "problemCount": len(problems),
         "status": task.status,
         "createdAt": task.createdAt,
     }

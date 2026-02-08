@@ -347,15 +347,18 @@ async def get_coaching_session(
             "detailFeedback": detail_feedback,
         })
 
-    # 학습 총평 (당일 Feedback의 generalComment)
-    feedback = await db.feedback.find_first(
+    # 학습 총평 (당일 Feedback 중 generalComment가 있는 최신 것)
+    feedbacks = await db.feedback.find_many(
         where={
             "menteeId": mentee_id,
             "mentorId": mentor_profile.id,
             "date": _to_utc(session_date),
-        }
+        },
+        order={"createdAt": "desc"},
     )
-    daily_summary = feedback.generalComment if feedback else None
+    daily_summary = next(
+        (fb.generalComment for fb in feedbacks if fb.generalComment), None
+    )
 
     return {
         "mentee": {
@@ -432,13 +435,18 @@ async def save_daily_summary(db: Prisma, user, data: DailySummaryRequest):
     mentor_profile = await _verify_mentor_mentee(db, user, data.menteeId)
 
     # 당일 Feedback 있으면 업데이트, 없으면 생성
-    feedback = await db.feedback.find_first(
+    feedbacks = await db.feedback.find_many(
         where={
             "menteeId": data.menteeId,
             "mentorId": mentor_profile.id,
             "date": _to_utc(data.date),
-        }
+        },
+        order={"createdAt": "desc"},
     )
+    # generalComment가 이미 있는 피드백 우선, 없으면 최신 피드백 사용
+    feedback = next(
+        (fb for fb in feedbacks if fb.generalComment), None
+    ) or (feedbacks[0] if feedbacks else None)
 
     if feedback:
         feedback = await db.feedback.update(

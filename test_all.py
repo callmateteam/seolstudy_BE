@@ -455,38 +455,203 @@ print(f"[Feedback create] {r.status_code}")
 assert r.status_code == 201
 ids["feedbackId"] = r.json()["data"]["id"]
 
+# --- Extended Feedback Data ---
+print("=== Extended Feedback Data ===")
+
+# Create tasks for 2026-02-04
+r = client.post(f"/api/tasks?menteeId={ids['menteeProfileId']}", headers=h(tokens["mentor"]), json={
+    "date": "2026-02-04", "title": "국어 비문학 독해 연습",
+    "goal": "추론 능력 향상", "subject": "KOREAN",
+    "tags": ["국어", "비문학", "추론"],
+})
+assert r.status_code == 201
+ids["task_ko_0204"] = r.json()["data"]["id"]
+
+r = client.post(f"/api/tasks?menteeId={ids['menteeProfileId']}", headers=h(tokens["mentor"]), json={
+    "date": "2026-02-04", "title": "영어 문법 복습",
+    "goal": "관계대명사 정리", "subject": "ENGLISH",
+    "tags": ["영어", "문법"],
+})
+assert r.status_code == 201
+ids["task_en_0204"] = r.json()["data"]["id"]
+
+# Submit tasks on 2026-02-04
+r = client.post(f"/api/tasks/{ids['task_ko_0204']}/submissions", headers=h(tokens["mentee"]), json={
+    "submissionType": "TEXT", "textContent": "비문학 지문을 분석하고 핵심 내용을 정리했습니다.",
+    "studyTimeMinutes": 50,
+    "comment": "지문이 길어서 시간이 좀 걸렸어요"
+})
+assert r.status_code == 201
+
+r = client.post(f"/api/tasks/{ids['task_en_0204']}/submissions", headers=h(tokens["mentee"]), json={
+    "submissionType": "TEXT", "textContent": "관계대명사 who, which, that 용법 정리 완료",
+    "studyTimeMinutes": 35,
+    "comment": "which와 that의 차이가 헷갈려요"
+})
+assert r.status_code == 201
+
+# Feedback for 02-03: 수학 task (멘토 출제 과제)
+r = client.post("/api/mentor/feedback", headers=h(tokens["mentor"]), json={
+    "menteeId": ids["menteeProfileId"],
+    "date": "2026-02-03",
+    "items": [
+        {"taskId": ids["mentorTaskId"], "detail": "미분 개념을 잘 이해하고 있습니다. 3번 문제의 풀이 과정을 더 자세히 써보세요."},
+    ],
+    "summary": "수학 학습 우수",
+    "generalComment": "수학 개념 이해도가 높아지고 있어요. 풀이 과정 서술에 조금 더 신경 쓰면 좋겠습니다."
+})
+assert r.status_code == 201
+ids["feedbackId_math_0203"] = r.json()["data"]["id"]
+
+# Feedback for 02-04: 국어+영어
+r = client.post("/api/mentor/feedback", headers=h(tokens["mentor"]), json={
+    "menteeId": ids["menteeProfileId"],
+    "date": "2026-02-04",
+    "items": [
+        {"taskId": ids["task_ko_0204"], "detail": "비문학 독해 분석이 정확해졌습니다. 핵심 문장 밑줄 긋는 습관을 들이면 더 좋아질 거예요."},
+        {"taskId": ids["task_en_0204"], "detail": "관계대명사 용법 정리를 잘했어요. 실전 문제에서 적용 연습을 해보세요."},
+    ],
+    "summary": "국어·영어 전반적으로 양호",
+    "isHighlighted": True,
+    "generalComment": "오늘 두 과목 모두 열심히 했습니다. 내일은 수학도 함께 공부해봐요!"
+})
+assert r.status_code == 201
+ids["feedbackId_0204"] = r.json()["data"]["id"]
+assert len(r.json()["data"]["items"]) == 2
+
+# Create tasks for 2026-02-05
+r = client.post(f"/api/tasks?menteeId={ids['menteeProfileId']}", headers=h(tokens["mentor"]), json={
+    "date": "2026-02-05", "title": "수학 적분 기초",
+    "goal": "부정적분 연습", "subject": "MATH",
+    "tags": ["수학", "적분"],
+    "content": "부정적분의 기본 공식을 활용하여 문제를 풀어보세요.",
+    "problems": [
+        {"number": 1, "title": "∫2x dx = ?", "correctAnswer": "x^2 + C", "displayOrder": 0},
+        {"number": 2, "title": "∫3x^2 dx = ?", "correctAnswer": "x^3 + C", "displayOrder": 1},
+    ]
+})
+assert r.status_code == 201
+ids["task_math_0205"] = r.json()["data"]["id"]
+
+r = client.post(f"/api/tasks?menteeId={ids['menteeProfileId']}", headers=h(tokens["mentor"]), json={
+    "date": "2026-02-05", "title": "국어 화법과 작문",
+    "goal": "토론 구조 분석", "subject": "KOREAN",
+    "tags": ["국어", "화법과작문"],
+})
+assert r.status_code == 201
+ids["task_ko_0205"] = r.json()["data"]["id"]
+
+# Submit tasks on 2026-02-05
+r = client.post(f"/api/tasks/{ids['task_math_0205']}/submissions", headers=h(tokens["mentee"]), json={
+    "submissionType": "TEXT", "textContent": "적분 문제 풀이 완료",
+    "studyTimeMinutes": 40,
+    "comment": "적분 상수 C를 잊지 않도록 주의해야겠어요"
+})
+assert r.status_code == 201
+
+r = client.post(f"/api/tasks/{ids['task_ko_0205']}/submissions", headers=h(tokens["mentee"]), json={
+    "submissionType": "TEXT", "textContent": "토론 구조 분석 - 주장, 근거, 반론 정리",
+    "studyTimeMinutes": 30,
+})
+assert r.status_code == 201
+
+# Feedback for 02-05: 수학+국어
+r = client.post("/api/mentor/feedback", headers=h(tokens["mentor"]), json={
+    "menteeId": ids["menteeProfileId"],
+    "date": "2026-02-05",
+    "items": [
+        {"taskId": ids["task_math_0205"], "detail": "적분 기초가 탄탄해지고 있어요. 적분 상수 C 잊지 않은 점이 좋습니다."},
+        {"taskId": ids["task_ko_0205"], "detail": "토론 구조 분석이 체계적입니다. 반론을 더 구체적으로 써보세요."},
+    ],
+    "summary": "수학·국어 학습 우수",
+    "isHighlighted": False,
+    "generalComment": "수학 적분과 국어 화법 모두 꼼꼼하게 학습했습니다. 이 조자로 꾸준히 하면 실력이 많이 오를 거예요."
+})
+assert r.status_code == 201
+ids["feedbackId_0205"] = r.json()["data"]["id"]
+assert len(r.json()["data"]["items"]) == 2
+
+print(f"[Extended feedback] 3 additional feedbacks created")
+print(f"  -> 02-03: 수학 피드백 (미분 개념 피드백)")
+print(f"  -> 02-04: 국어+영어 피드백 (2 items, highlighted)")
+print(f"  -> 02-05: 수학+국어 피드백 (2 items, 적분+화법)")
+
 print("--- Phase 3 OK ---\n")
 
 # ===== Feedback Query (Mentee side) =====
 print("=== Feedback Query ===")
 
-# By date
+# By date: 02-03 (2 feedbacks: 국어 + 수학)
 r = client.get(f"/api/feedback?menteeId={ids['menteeProfileId']}&date=2026-02-03", headers=h(tokens["mentee"]))
-print(f"[Feedback by date] {r.status_code} count={len(r.json()['data'])}")
+fb_0203 = r.json()["data"]
+print(f"[Feedback by date 02-03] {r.status_code} count={len(fb_0203)}")
 assert r.status_code == 200
+assert len(fb_0203) >= 2
 
-# By subject (enriched with AI analysis)
-r = client.get(f"/api/feedback/by-subject?menteeId={ids['menteeProfileId']}&subject=KOREAN", headers=h(tokens["mentee"]))
-fbs = r.json()["data"]
-print(f"[Feedback by subject] {r.status_code} count={len(fbs)}")
+# By date: 02-04 (1 feedback with 2 items)
+r = client.get(f"/api/feedback?menteeId={ids['menteeProfileId']}&date=2026-02-04", headers=h(tokens["mentee"]))
+fb_0204 = r.json()["data"]
+print(f"[Feedback by date 02-04] {r.status_code} count={len(fb_0204)}")
 assert r.status_code == 200
-assert len(fbs) >= 1
-fb = fbs[0]
+assert len(fb_0204) >= 1
+
+# By date: 02-05 (1 feedback with 2 items)
+r = client.get(f"/api/feedback?menteeId={ids['menteeProfileId']}&date=2026-02-05", headers=h(tokens["mentee"]))
+fb_0205 = r.json()["data"]
+print(f"[Feedback by date 02-05] {r.status_code} count={len(fb_0205)}")
+assert r.status_code == 200
+assert len(fb_0205) >= 1
+
+# By subject: KOREAN (should have feedbacks from 02-03, 02-04, 02-05)
+r = client.get(f"/api/feedback/by-subject?menteeId={ids['menteeProfileId']}&subject=KOREAN", headers=h(tokens["mentee"]))
+fbs_ko = r.json()["data"]
+print(f"[Feedback by subject KOREAN] {r.status_code} count={len(fbs_ko)}")
+assert r.status_code == 200
+assert len(fbs_ko) >= 1
+fb = fbs_ko[0]
 assert "items" in fb
 assert len(fb["items"]) >= 1
 item = fb["items"][0]
-assert item["taskTitle"] == "국어 문해력 p.10~15"
-assert item["detail"] == "독해력이 많이 향상되었습니다"
-assert item["submissionId"] is not None
-assert item["signalLight"] in ("GREEN", "YELLOW", "RED")
-assert item["densityScore"] is not None
-assert fb["generalComment"] == "이 조자로 계속 열심히 하세요"
-print(f"  -> items[0] taskTitle={item['taskTitle']} signal={item['signalLight']} density={item['densityScore']}")
+assert item["detail"] is not None
+print(f"  -> items[0] taskTitle={item['taskTitle']} detail={item['detail'][:30]}...")
 
-# Detail
-r = client.get(f"/api/feedback/{ids['feedbackId']}", headers=h(tokens["mentee"]))
-print(f"[Feedback detail] {r.status_code}")
+# By subject: MATH (should have feedbacks from 02-03, 02-05)
+r = client.get(f"/api/feedback/by-subject?menteeId={ids['menteeProfileId']}&subject=MATH", headers=h(tokens["mentee"]))
+fbs_math = r.json()["data"]
+print(f"[Feedback by subject MATH] {r.status_code} count={len(fbs_math)}")
 assert r.status_code == 200
+assert len(fbs_math) >= 1
+math_items = [it for fb in fbs_math for it in fb.get("items", [])]
+print(f"  -> total MATH items: {len(math_items)}")
+
+# By subject: ENGLISH (should have feedback from 02-04)
+r = client.get(f"/api/feedback/by-subject?menteeId={ids['menteeProfileId']}&subject=ENGLISH", headers=h(tokens["mentee"]))
+fbs_en = r.json()["data"]
+print(f"[Feedback by subject ENGLISH] {r.status_code} count={len(fbs_en)}")
+assert r.status_code == 200
+assert len(fbs_en) >= 1
+en_items = [it for fb in fbs_en for it in fb.get("items", [])]
+assert any(it["detail"] == "관계대명사 용법 정리를 잘했어요. 실전 문제에서 적용 연습을 해보세요." for it in en_items)
+print(f"  -> total ENGLISH items: {len(en_items)}")
+
+# Detail: 02-04 feedback (2 items, highlighted)
+r = client.get(f"/api/feedback/{ids['feedbackId_0204']}", headers=h(tokens["mentee"]))
+print(f"[Feedback detail 02-04] {r.status_code}")
+assert r.status_code == 200
+fb_detail = r.json()["data"]
+assert fb_detail["isHighlighted"] == True
+assert fb_detail["generalComment"] == "오늘 두 과목 모두 열심히 했습니다. 내일은 수학도 함께 공부해봐요!"
+assert len(fb_detail["items"]) == 2
+print(f"  -> highlighted={fb_detail['isHighlighted']} items={len(fb_detail['items'])} comment={fb_detail['generalComment'][:20]}...")
+
+# Detail: 02-05 feedback (2 items, not highlighted)
+r = client.get(f"/api/feedback/{ids['feedbackId_0205']}", headers=h(tokens["mentee"]))
+print(f"[Feedback detail 02-05] {r.status_code}")
+assert r.status_code == 200
+fb_detail2 = r.json()["data"]
+assert fb_detail2["isHighlighted"] == False
+assert len(fb_detail2["items"]) == 2
+print(f"  -> highlighted={fb_detail2['isHighlighted']} items={len(fb_detail2['items'])} summary={fb_detail2['summary']}")
 
 print("--- Feedback Query OK ---\n")
 
@@ -739,7 +904,7 @@ assert "KOREAN" in r.json()["data"]
 assert "ENGLISH" in r.json()["data"]
 assert "MATH" in r.json()["data"]
 
-# Create lesson
+# Create lesson (with problems, content, targetStudyMinutes)
 from datetime import date
 today = date.today().isoformat()
 r = client.post("/api/mentor/lessons", headers=h(tokens["mentor"]), json={
@@ -749,32 +914,68 @@ r = client.post("/api/mentor/lessons", headers=h(tokens["mentor"]), json={
     "abilityTags": ["문해력", "비문학"],
     "title": "비문학 독해 연습",
     "goal": "지문 분석 능력 향상",
+    "content": "자연권 사상은 근대 정치 철학의 핵심 개념으로...",
+    "targetStudyMinutes": 60,
+    "problems": [
+        {
+            "number": 1,
+            "title": "윗글의 중심 내용으로 가장 적절한 것은?",
+            "options": [
+                {"label": "1", "text": "자연권의 역사적 발전 과정"},
+                {"label": "2", "text": "국가 권력의 정당화 논리"},
+            ],
+            "correctAnswer": "2",
+        },
+        {
+            "number": 2,
+            "title": "윗글에서 추론할 수 있는 내용으로 적절하지 않은 것은?",
+            "content": "<보기> 홉스는 자연 상태를...",
+        },
+    ],
 })
 print(f"[Create lesson] {r.status_code} title={r.json()['data']['title']}")
 assert r.status_code == 201
 lesson_id = r.json()["data"]["id"]
-assert r.json()["data"]["abilityTags"] == ["문해력", "비문학"]
+lesson_data = r.json()["data"]
+assert lesson_data["abilityTags"] == ["문해력", "비문학"]
+assert lesson_data["content"] == "자연권 사상은 근대 정치 철학의 핵심 개념으로..."
+assert lesson_data["targetStudyMinutes"] == 60
+assert lesson_data["problemCount"] == 2
+assert len(lesson_data["problems"]) == 2
+assert lesson_data["problems"][0]["title"] == "윗글의 중심 내용으로 가장 적절한 것은?"
+print(f"  -> content: {lesson_data['content'][:30]}...")
+print(f"  -> targetStudyMinutes: {lesson_data['targetStudyMinutes']}")
+print(f"  -> problems: {lesson_data['problemCount']}개")
 
 # Get lessons
 r = client.get(f"/api/mentor/lessons?menteeId={ids['menteeProfileId']}&date={today}", headers=h(tokens["mentor"]))
 print(f"[Get lessons] {r.status_code} total={r.json()['data']['total']}")
 assert r.status_code == 200
 assert r.json()["data"]["total"] >= 1
+assert r.json()["data"]["lessons"][0]["problemCount"] == 2
 
 # Get lesson detail
 r = client.get(f"/api/mentor/lessons/{lesson_id}", headers=h(tokens["mentor"]))
 print(f"[Lesson detail] {r.status_code} title={r.json()['data']['title']}")
 assert r.status_code == 200
+detail = r.json()["data"]
+assert detail["content"] is not None
+assert detail["targetStudyMinutes"] == 60
+assert len(detail["problems"]) == 2
+print(f"  -> problems[0]: {detail['problems'][0]['title'][:20]}...")
+print(f"  -> problems[1]: {detail['problems'][1]['title'][:20]}...")
 
 # Update lesson
 r = client.patch(f"/api/mentor/lessons/{lesson_id}", headers=h(tokens["mentor"]), json={
     "title": "비문학 독해 연습 (수정)",
     "abilityTags": ["문해력", "비문학", "문학"],
+    "targetStudyMinutes": 90,
 })
 print(f"[Update lesson] {r.status_code} title={r.json()['data']['title']}")
 assert r.status_code == 200
 assert r.json()["data"]["title"] == "비문학 독해 연습 (수정)"
 assert len(r.json()["data"]["abilityTags"]) == 3
+assert r.json()["data"]["targetStudyMinutes"] == 90
 
 # Delete lesson
 r = client.delete(f"/api/mentor/lessons/{lesson_id}", headers=h(tokens["mentor"]))

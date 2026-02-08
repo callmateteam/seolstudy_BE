@@ -1,4 +1,5 @@
 import io
+import json
 import uuid
 
 import boto3
@@ -169,6 +170,37 @@ async def upload_pdf(file: UploadFile) -> dict:
         "size": len(content),
         "rawBytes": content,
     }
+
+
+def _parsed_key_from_url(material_url: str) -> str:
+    """materialUrl에서 파싱 JSON의 S3 key를 생성합니다.
+    pdfs/abc.pdf → pdfs/abc.parsed.json
+    """
+    key = _key_from_url(material_url)
+    base = key.rsplit(".", 1)[0] if "." in key else key
+    return f"{base}.parsed.json"
+
+
+async def save_parsed_json(material_url: str, parsed_data: dict) -> str:
+    """PDF 파싱 결과를 S3에 JSON으로 저장합니다."""
+    key = _parsed_key_from_url(material_url)
+    body = json.dumps(parsed_data, ensure_ascii=False).encode("utf-8")
+    await _upload_to_s3(body, key, "application/json")
+    return _s3_url(key)
+
+
+def load_parsed_json(material_url: str) -> dict | None:
+    """S3에 저장된 PDF 파싱 결과를 조회합니다."""
+    if _is_mock_mode():
+        return None
+
+    key = _parsed_key_from_url(material_url)
+    try:
+        s3 = _get_s3()
+        resp = s3.get_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
+        return json.loads(resp["Body"].read().decode("utf-8"))
+    except Exception:
+        return None
 
 
 async def upload_study_photo(file: UploadFile) -> dict:

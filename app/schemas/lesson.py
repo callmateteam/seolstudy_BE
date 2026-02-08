@@ -17,6 +17,16 @@ class AbilityTagsResponse(BaseModel):
     tags: list[str]
 
 
+class LessonProblemCreate(BaseModel):
+    """학습 문제 생성 요청"""
+    number: int = Field(ge=1, description="문제 번호 (1부터 시작)")
+    title: str = Field(min_length=1, max_length=500, description="문제 제목/질문")
+    content: str | None = Field(default=None, max_length=5000, description="보조 지문이나 <보기>")
+    options: list[dict] | None = Field(default=None, description="객관식 선지 목록")
+    correctAnswer: str | None = Field(default=None, max_length=200, description="정답")
+    displayOrder: int = Field(default=0, ge=0, description="표시 순서")
+
+
 class LessonCreateRequest(BaseModel):
     """학습 등록 요청"""
     menteeId: str
@@ -41,6 +51,20 @@ class LessonCreateRequest(BaseModel):
         default=None,
         description="직접 업로드한 학습지 URL",
     )
+    content: str | None = Field(
+        default=None,
+        max_length=10000,
+        description="추출된 지문/본문 텍스트",
+    )
+    problems: list[LessonProblemCreate] | None = Field(
+        default=None,
+        description="문제 목록 (PDF 자동 추출 또는 직접 입력)",
+    )
+    targetStudyMinutes: int | None = Field(
+        default=None, ge=0, le=1440,
+        description="목표 공부 시간 (분)",
+        examples=[60],
+    )
 
 
 class LessonUpdateRequest(BaseModel):
@@ -53,6 +77,21 @@ class LessonUpdateRequest(BaseModel):
     goal: str | None = Field(default=None, max_length=500)
     materialId: str | None = None
     materialUrl: str | None = None
+    content: str | None = Field(default=None, max_length=10000)
+    targetStudyMinutes: int | None = Field(default=None, ge=0, le=1440)
+
+
+class LessonProblemResponse(BaseModel):
+    """학습 문제 응답"""
+    id: str
+    number: int
+    title: str
+    content: str | None = None
+    options: list[dict] | None = None
+    correctAnswer: str | None = None
+    displayOrder: int = 0
+
+    model_config = {"from_attributes": True}
 
 
 class LessonResponse(BaseModel):
@@ -66,6 +105,10 @@ class LessonResponse(BaseModel):
     goal: str | None = None
     materialId: str | None = None
     materialUrl: str | None = None
+    content: str | None = None
+    targetStudyMinutes: int | None = None
+    problems: list[LessonProblemResponse] = []
+    problemCount: int = 0
     status: str
     createdAt: dt.datetime
 

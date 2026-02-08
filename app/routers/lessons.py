@@ -166,6 +166,10 @@ async def upload_lesson_material(
     parsed = await pdf_parser_service.parse_pdf_content(result["rawBytes"])
     has_content = bool(parsed.get("content")) or bool(parsed.get("problems"))
 
+    # 파싱 결과를 S3에 저장 (학습 등록 시 자동 연결용)
+    if has_content:
+        await upload_service.save_parsed_json(result["url"], parsed)
+
     return SuccessResponse(
         data=LessonUploadResponse(
             materialUrl=result["url"],
