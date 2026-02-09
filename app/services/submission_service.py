@@ -2,6 +2,14 @@ from fastapi import HTTPException, status
 from prisma import Json, Prisma
 
 from app.schemas.submission import SelfScoreRequest, SubmissionCreateRequest
+from app.services.wrong_answer_service import create_wrong_answer_sheets_for_submission
+
+
+def _normalize_answer(s: str | None) -> str:
+    """정답 비교용 정규화: 공백 제거 + 소문자"""
+    if s is None:
+        return ""
+    return s.strip().lower()
 
 
 async def create_submission(
@@ -85,6 +93,58 @@ async def create_submission(
             if pr.highlightData is not None:
                 pr_data["highlightData"] = Json(pr.highlightData)
             await db.problemresponse.create(data=pr_data)
+
+    # 자동 채점: correctAnswer가 있는 문제의 정답 비교
+    if has_problems and task.problems:
+        problem_map = {p.id: p for p in task.problems}
+        auto_correct = 0
+        auto_total = 0
+        wrong_problems = []
+
+        for pr in data.problemResponses:
+            problem = problem_map.get(pr.problemId)
+            if not problem or not problem.correctAnswer:
+                continue
+
+            is_correct = (
+                _normalize_answer(pr.answer)
+                == _normalize_answer(problem.correctAnswer)
+            )
+            auto_total += 1
+            if is_correct:
+                auto_correct += 1
+            else:
+                wrong_problems.append({
+                    "problemId": problem.id,
+                    "problemNumber": problem.number,
+                    "problemTitle": problem.title,
+                    "originalAnswer": pr.answer,
+                    "correctAnswer": problem.correctAnswer,
+                })
+
+            await db.problemresponse.update_many(
+                where={
+                    "submissionId": submission.id,
+                    "problemId": pr.problemId,
+                },
+                data={"isCorrect": is_correct},
+            )
+
+        if auto_total > 0:
+            wrong_numbers = [wp["problemNumber"] for wp in wrong_problems]
+            await db.tasksubmission.update(
+                where={"id": submission.id},
+                data={
+                    "selfScoreCorrect": auto_correct,
+                    "selfScoreTotal": auto_total,
+                    "wrongQuestions": wrong_numbers,
+                },
+            )
+
+            if wrong_problems:
+                await create_wrong_answer_sheets_for_submission(
+                    db, submission.id, user.menteeProfile.id, wrong_problems
+                )
 
     # Task 업데이트: status + studyTimeMinutes
     task_update: dict = {"status": "SUBMITTED"}

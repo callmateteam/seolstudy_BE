@@ -270,6 +270,7 @@ async def get_coaching_session(
                     "problemNumber": pr.problem.number if pr.problem else 0,
                     "problemTitle": pr.problem.title if pr.problem else "",
                     "answer": pr.answer,
+                    "isCorrect": pr.isCorrect,
                     "textNote": pr.textNote,
                     "highlightData": pr.highlightData,
                     "drawingUrl": pr.drawingUrl,

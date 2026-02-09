@@ -256,11 +256,18 @@ print(f"[Submit with problems] {r.status_code}")
 assert r.status_code == 201
 sub = r.json()["data"]
 assert sub["comment"] == "3번 문제가 어려웠어요"
-assert sub["selfScoreCorrect"] == 2
+assert sub["selfScoreCorrect"] == 2  # 자동 채점: 2/3
 assert sub["selfScoreTotal"] == 3
 assert len(sub["problemResponses"]) == 3
 assert sub["problemResponses"][0]["answer"] == "1"
+# 자동 채점 결과 검증
+prs = sorted(sub["problemResponses"], key=lambda x: x["id"])
+pr_by_pid = {pr["problemId"]: pr for pr in sub["problemResponses"]}
+assert pr_by_pid[ids["problemId1"]]["isCorrect"] == True   # "1" == "1"
+assert pr_by_pid[ids["problemId2"]]["isCorrect"] == True   # "3" == "3"
+assert pr_by_pid[ids["problemId3"]]["isCorrect"] == False  # "2x^2" != "3x^2"
 print(f"  -> responses={len(sub['problemResponses'])} selfScore={sub['selfScoreCorrect']}/{sub['selfScoreTotal']}")
+print(f"  -> autoGrading: p1=✓ p2=✓ p3=✗")
 ids["mentorSubmissionId"] = sub["id"]
 
 # Verify task status updated to SUBMITTED and studyTimeMinutes saved
@@ -658,10 +665,17 @@ print("--- Feedback Query OK ---\n")
 # ===== Wrong Answers =====
 print("=== Wrong Answers ===")
 
-# Get wrong answer sheets (empty initially)
+# 자동 채점으로 오답노트 자동 생성 확인 (problem 3: "2x^2" != "3x^2")
 r = client.get("/api/wrong-answers", headers=h(tokens["mentee"]))
-print(f"[Wrong answers list] {r.status_code} count={len(r.json()['data'])}")
+wa = r.json()["data"]
+print(f"[Wrong answers list] {r.status_code} count={len(wa)}")
 assert r.status_code == 200
+assert len(wa) >= 1
+wrong_sheet = next((s for s in wa if s["problemNumber"] == 3), None)
+assert wrong_sheet is not None
+assert wrong_sheet["originalAnswer"] == "2x^2"
+assert wrong_sheet["correctAnswer"] == "3x^2"
+print(f"  -> auto wrong sheet: problem #{wrong_sheet['problemNumber']} answer={wrong_sheet['originalAnswer']} correct={wrong_sheet['correctAnswer']}")
 
 print("--- Wrong Answers OK ---\n")
 

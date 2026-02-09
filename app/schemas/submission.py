@@ -63,6 +63,7 @@ class ProblemResponseData(BaseModel):
     id: str = Field(description="응답 ID")
     problemId: str = Field(description="문제 ID")
     answer: str | None = Field(default=None, description="선택한 답")
+    isCorrect: bool | None = Field(default=None, description="자동채점 결과 (null=채점불가, true=정답, false=오답)")
     textNote: str | None = Field(default=None, description="텍스트 메모")
     highlightData: Any | None = Field(default=None, description="형광펜 위치 데이터")
     drawingUrl: str | None = Field(default=None, description="그림 이미지 S3 URL")

@@ -218,6 +218,7 @@ model ProblemResponse {
   problemId     String
   problem       TaskProblem    @relation(fields: [problemId], references: [id], onDelete: Cascade)
   answer        String?
+  isCorrect     Boolean?
   textNote      String?
   highlightData Json?
   drawingUrl    String?
